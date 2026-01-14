@@ -1,0 +1,7 @@
+# 核心依赖（CLI 必需）
+p115client>=0.0.9
+PyYAML>=6.0
+requests>=2.31.0
+tqdm>=4.66.0
+colorama>=0.4.6
+watchdog>=3.0.0
