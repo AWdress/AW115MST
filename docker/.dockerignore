@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# 虚拟环境
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 日志和数据
+logs/
+*.log
+checkpoint.json
+
+# 测试文件
+test_files_temp/
+test_rapid_files/
+
+# Git
+.git/
+.gitignore
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# 配置文件（使用挂载）
+config.yaml
+115-cookies.txt
+
+# 文档
+*.md

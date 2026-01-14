@@ -1,0 +1,57 @@
+# 115网盘配置
+p115:
+  cookies_file: "./config/115-cookies.txt"  # cookies文件路径
+  check_for_relogin: true                   # 自动重新登录
+
+# 文件处理配置
+file_processing:
+  # 文件过滤规则
+  filters:
+    min_size: 0                      # 最小文件大小（0=不限制，字节）
+    max_size: 107374182400           # 最大文件大小（100GB）
+    include_extensions: []           # 包含的文件扩展名（为空则不限制）
+      # - .mp4
+      # - .mkv
+      # - .avi
+      # - .zip
+      # - .rar
+    exclude_extensions:              # 排除的文件扩展名
+      - .txt
+      - .log
+      - .tmp
+  
+  # 移动策略
+  move_strategy:
+    rapid_files_dir: "./rapid"            # 可秒传文件目标目录
+    non_rapid_files_dir: "./non_rapid"    # 不可秒传文件目录
+    keep_non_rapid_in_place: false        # 不可秒传文件也移动
+    create_subdirs: true                  # 保持原有目录结构
+
+# 性能配置
+performance:
+  hash_chunk_size: 8192              # 哈希计算块大小（字节）
+  max_workers: 4                     # 最大并发数
+  request_timeout: 10                # 接口请求超时（秒）
+  retry_times: 3                     # 失败重试次数
+  retry_delay: 2                     # 重试延迟（秒）
+
+# 日志配置
+logging:
+  level: "INFO"                      # 日志级别：DEBUG/INFO/WARNING/ERROR
+  console_output: true               # 控制台输出
+  file_output: true                  # 文件输出
+  log_dir: "./logs"                  # 日志目录
+  max_log_files: 30                  # 保留最近N天的日志
+
+# 断点续传配置
+checkpoint:
+  enabled: true                      # 启用断点续传
+  checkpoint_file: "./data/checkpoint.json"  # 断点文件路径
+  auto_save_interval: 10             # 自动保存间隔（处理N个文件后保存）
+
+# 重新检测配置
+recheck:
+  enabled: true                      # 启用重新检测功能
+  recheck_interval: 86400            # 重新检测间隔（秒，默认24小时=86400秒）
+  recheck_file: "./data/recheck.json"     # 重新检测记录文件
+  max_recheck_times: 10              # 最大重新检测次数（超过后不再检测）

@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  aw115mst:
+    image: awdress/aw115mst:latest
+    container_name: aw115mst
+    volumes:
+      # 配置文件
+      - ../config:/app/config:ro
+      # 工作目录
+      - ../input:/app/input
+      - ../rapid:/app/rapid
+      - ../non_rapid:/app/non_rapid
+      - ../logs:/app/logs
+      # 数据文件（断点续传和重新检测记录）
+      - ./data/checkpoint.json:/app/data/checkpoint.json
+      - ./data/recheck.json:/app/data/recheck.json
+    environment:
+      - TZ=Asia/Shanghai
