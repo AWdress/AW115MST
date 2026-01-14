@@ -21,12 +21,12 @@
 3. 点击 **New repository secret**
 4. 添加以下两个 Secrets：
 
-#### DOCKER_USERNAME
-- Name: `DOCKER_USERNAME`
+#### DOCKERHUB_USERNAME
+- Name: `DOCKERHUB_USERNAME`
 - Value: 你的 Docker Hub 用户名（如：`awdress`）
 
-#### DOCKER_PASSWORD
-- Name: `DOCKER_PASSWORD`
+#### DOCKERHUB_TOKEN
+- Name: `DOCKERHUB_TOKEN`
 - Value: 刚才生成的 Access Token
 
 ### 3. 验证配置
