@@ -96,15 +96,14 @@ class FileWatcher:
         if file_path_str in self.processing_files:
             return
         
-        # 记录文件变化时间
+        # 记录文件变化时间（只在首次检测到时打印）
         with self.lock:
+            is_new = file_path_str not in self.pending_files
             self.pending_files[file_path_str] = time.time()
             
-        # 根据事件类型显示不同信息
-        if event.event_type == 'created':
-            print(f"📥 检测到新文件: {file_path.name}")
-        elif event.event_type == 'modified':
-            print(f"📝 文件修改中: {file_path.name}")
+            # 只在首次检测到文件时显示信息
+            if is_new:
+                print(f"📥 检测到新文件: {file_path.name}")
     
     def _debounce_checker(self):
         """防抖检查线程（定期检查稳定的文件）"""

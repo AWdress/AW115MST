@@ -134,6 +134,23 @@ class FileHandler:
             size /= 1024.0
         return f"{size:.2f} PB"
     
+    def move_or_copy_file(self, source: Path, target_dir: Path, keep_structure: bool = False,
+                          base_path: Optional[Path] = None, use_copy: bool = False) -> Path:
+        """
+        移动或复制文件到目标目录
+        
+        :param source: 源文件路径
+        :param target_dir: 目标目录
+        :param keep_structure: 是否保持目录结构
+        :param base_path: 基础路径
+        :param use_copy: 是否使用复制（True=复制，False=移动）
+        :return: 目标文件路径
+        """
+        if use_copy:
+            return self.copy_file(source, target_dir, keep_structure, base_path)
+        else:
+            return self.move_file(source, target_dir, keep_structure, base_path)
+    
     def move_file(self, source: Path, target_dir: Path, keep_structure: bool = False, 
                   base_path: Optional[Path] = None) -> Path:
         """
@@ -148,11 +165,20 @@ class FileHandler:
         target_dir = Path(target_dir)
         target_dir.mkdir(parents=True, exist_ok=True)
         
+        # 转换为绝对路径
+        source = source.resolve()
+        if base_path:
+            base_path = base_path.resolve()
+        
         if keep_structure and base_path:
             # 保持目录结构
-            relative_path = source.relative_to(base_path)
-            target_path = target_dir / relative_path
-            target_path.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                relative_path = source.relative_to(base_path)
+                target_path = target_dir / relative_path
+                target_path.parent.mkdir(parents=True, exist_ok=True)
+            except ValueError:
+                # 如果路径不在 base_path 下，直接使用文件名
+                target_path = target_dir / source.name
         else:
             # 直接移动到目标目录
             target_path = target_dir / source.name
@@ -215,10 +241,19 @@ class FileHandler:
         target_dir = Path(target_dir)
         target_dir.mkdir(parents=True, exist_ok=True)
         
+        # 转换为绝对路径
+        source = source.resolve()
+        if base_path:
+            base_path = base_path.resolve()
+        
         if keep_structure and base_path:
-            relative_path = source.relative_to(base_path)
-            target_path = target_dir / relative_path
-            target_path.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                relative_path = source.relative_to(base_path)
+                target_path = target_dir / relative_path
+                target_path.parent.mkdir(parents=True, exist_ok=True)
+            except ValueError:
+                # 如果路径不在 base_path 下，直接使用文件名
+                target_path = target_dir / source.name
         else:
             target_path = target_dir / source.name
         

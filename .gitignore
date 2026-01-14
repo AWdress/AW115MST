@@ -52,6 +52,10 @@ non_rapid/*
 
 # 配置文件（包含敏感信息）
 config/115-cookies.txt
+config/config.yaml
+
+# 保留示例配置文件
+!config/*.example
 
 # 测试
 .pytest_cache/

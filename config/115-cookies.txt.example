@@ -1,0 +1,16 @@
+# 115网盘 Cookies 示例文件
+# 
+# 获取方法：
+# 1. 在浏览器中登录 115.com
+# 2. 打开开发者工具（F12）
+# 3. 切换到 Network 标签
+# 4. 刷新页面，找到任意请求
+# 5. 在请求头中找到 Cookie 字段
+# 6. 复制完整的 Cookie 值到下面（替换示例内容）
+#
+# Cookie 格式示例：
+# UID=12345678_A1_1234567890; CID=abcdefghijklmnopqrstuvwxyz; SEID=xyz123...
+#
+# 请将下面的示例替换为你的真实 Cookie：
+
+UID=YOUR_UID_HERE; CID=YOUR_CID_HERE; SEID=YOUR_SEID_HERE

@@ -1,3 +1,6 @@
+# AW115MST 配置文件示例
+# 复制此文件为 config.yaml 并修改相应配置
+
 # 115网盘配置
 p115:
   cookies_file: "./config/115-cookies.txt"  # cookies文件路径
@@ -23,9 +26,13 @@ file_processing:
   # 移动策略
   move_strategy:
     rapid_files_dir: "./rapid"            # 可秒传文件目标目录
-    non_rapid_files_dir: "./non_rapid"    # 不可秒传文件目录
+    non_rapid_files_dir: "./non_rapid"    # 不可秒传文件目录（仅移动模式使用）
     keep_non_rapid_in_place: false        # 不可秒传文件也移动
     create_subdirs: true                  # 保持原有目录结构
+    use_copy: false                       # 使用复制而非移动（true=复制，false=移动）
+                                          # 复制模式说明：
+                                          # - 可秒传文件：复制到 rapid/，原文件保留
+                                          # - 不可秒传文件：保留在 input/，继续重检
 
 # 性能配置
 performance:
@@ -52,6 +59,28 @@ checkpoint:
 # 重新检测配置
 recheck:
   enabled: true                      # 启用重新检测功能
-  recheck_interval: 86400            # 重新检测间隔（秒，默认24小时=86400秒）
   recheck_file: "./data/recheck.json"     # 重新检测记录文件
   max_recheck_times: 10              # 最大重新检测次数（超过后不再检测）
+  delay_move_times: 3                # 延迟移动次数（检测N次后仍不能秒传才移动到 non_rapid）
+
+# Telegram 通知配置
+telegram:
+  enabled: false                     # 启用 Telegram 通知
+  bot_token: ""                      # Bot Token (从 @BotFather 获取)
+  chat_id: ""                        # Chat ID (你的用户 ID 或群组 ID)
+  notify_on_complete: true           # 处理完成时通知
+  notify_on_error: true              # 发生错误时通知
+  notify_on_rapid: false             # 每个可秒传文件都通知（可能很多）
+  bot_mode: false                    # Bot 交互模式（启用后可通过 Telegram 控制）
+
+# 调度配置
+scheduler:
+  # 实时监控
+  watch:
+    enabled: true                    # 启用实时监控（监控 input 目录）
+    debounce_seconds: 5              # 防抖时间（秒）
+  
+  # 定时任务（扫描 input + 重检 non_rapid）
+  cron:
+    enabled: true                    # 启用定时任务
+    interval: "30m"                  # 运行间隔（支持: 5m, 30m, 1h, 6h 等）

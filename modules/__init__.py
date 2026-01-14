@@ -5,12 +5,7 @@
 __version__ = "1.0.0"
 __author__ = "Your Name"
 
-from .file_handler import FileHandler
-from .p115_client import P115ClientWrapper
-from .logger import Logger
-from .config_manager import ConfigManager
-from .controller import RapidUploadController
-
+# 延迟导入，避免在导入 modules 包时就加载所有依赖
 __all__ = [
     "FileHandler",
     "P115ClientWrapper",
@@ -18,3 +13,4 @@ __all__ = [
     "ConfigManager",
     "RapidUploadController",
 ]
+
