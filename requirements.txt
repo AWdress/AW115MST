@@ -1,13 +1,11 @@
-# 核心依赖
+# 核心依赖（CLI 必需）
 p115client>=0.0.9
 PyYAML>=6.0
 requests>=2.31.0
-
-# GUI依赖
-PyQt6>=6.6.0
-PyQt6-Qt6>=6.6.0
-
-# 工具库
 tqdm>=4.66.0
 colorama>=0.4.6
 watchdog>=3.0.0
+
+# GUI 依赖（可选，本地使用）
+# PyQt6>=6.6.0
+# PyQt6-Qt6>=6.6.0
