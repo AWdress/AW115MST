@@ -38,11 +38,14 @@ class TelegramBot:
                 InlineKeyboardButton("📈 查看统计", callback_data="statistics")
             ],
             [
-                InlineKeyboardButton("📁 文件列表", callback_data="file_list"),
-                InlineKeyboardButton("⚙️ 系统信息", callback_data="system_info")
+                InlineKeyboardButton("🧹 清理记录", callback_data="clean_processed"),
+                InlineKeyboardButton("📁 文件列表", callback_data="file_list")
             ],
             [
-                InlineKeyboardButton("🔔 通知设置", callback_data="notification_settings"),
+                InlineKeyboardButton("⚙️ 系统信息", callback_data="system_info"),
+                InlineKeyboardButton("🔔 通知设置", callback_data="notification_settings")
+            ],
+            [
                 InlineKeyboardButton("❓ 帮助", callback_data="help")
             ]
         ]
@@ -81,6 +84,8 @@ class TelegramBot:
             await self.scan_now(query)
         elif action == "recheck_now":
             await self.recheck_now(query)
+        elif action == "clean_processed":
+            await self.clean_processed(query)
         elif action == "statistics":
             await self.show_statistics(query)
         elif action == "file_list":
@@ -222,6 +227,45 @@ class TelegramBot:
             )
         except Exception as e:
             await query.edit_message_text(f"❌ 重新检测失败: {str(e)}")
+    
+    async def clean_processed(self, query):
+        """清理已处理文件记录"""
+        await query.edit_message_text("🧹 开始清理已处理文件记录...\n请稍候...")
+        
+        try:
+            result = self.controller.clean_processed_records()
+            
+            if result.get('success'):
+                cleaned = result.get('cleaned', 0)
+                total_before = result.get('total_before', 0)
+                total_after = result.get('total_after', 0)
+                
+                result_text = f"""
+✅ <b>清理完成</b>
+
+📊 <b>清理结果：</b>
+• 清理前记录数: {total_before}
+• 清理后记录数: {total_after}
+• 已清理: {cleaned} 条
+
+💡 <b>说明：</b>
+清理已处理文件的标记，这些文件将在下次扫描时重新检测。
+
+🕐 完成时间: {datetime.now().strftime('%H:%M:%S')}
+"""
+            else:
+                result_text = f"❌ 清理失败: {result.get('error', '未知错误')}"
+            
+            keyboard = [[InlineKeyboardButton("🔙 返回菜单", callback_data="back_to_menu")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await query.edit_message_text(
+                result_text,
+                reply_markup=reply_markup,
+                parse_mode='HTML'
+            )
+        except Exception as e:
+            await query.edit_message_text(f"❌ 清理失败: {str(e)}")
     
     async def show_statistics(self, query):
         """显示统计信息"""
@@ -458,6 +502,9 @@ class TelegramBot:
 🔄 <b>重新检测</b>
 手动触发 non_rapid 目录重检
 
+🧹 <b>清理记录</b>
+清理已处理文件的标记（复制模式）
+
 📈 <b>查看统计</b>
 查看文件统计和秒传率
 
@@ -495,11 +542,14 @@ https://github.com/AWdress/AW115MST
                 InlineKeyboardButton("📈 查看统计", callback_data="statistics")
             ],
             [
-                InlineKeyboardButton("📁 文件列表", callback_data="file_list"),
-                InlineKeyboardButton("⚙️ 系统信息", callback_data="system_info")
+                InlineKeyboardButton("🧹 清理记录", callback_data="clean_processed"),
+                InlineKeyboardButton("📁 文件列表", callback_data="file_list")
             ],
             [
-                InlineKeyboardButton("🔔 通知设置", callback_data="notification_settings"),
+                InlineKeyboardButton("⚙️ 系统信息", callback_data="system_info"),
+                InlineKeyboardButton("🔔 通知设置", callback_data="notification_settings")
+            ],
+            [
                 InlineKeyboardButton("❓ 帮助", callback_data="help")
             ]
         ]

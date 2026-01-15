@@ -34,9 +34,15 @@ class Scheduler:
         self.cron_enabled = config.get('cron', {}).get('enabled', True)
         self.cron_interval = self._parse_interval(config.get('cron', {}).get('interval', '6h'))
         
+        # Telegram Bot 配置
+        telegram_config = controller.config_manager.get('telegram', {})
+        self.bot_enabled = telegram_config.get('enabled', False) and telegram_config.get('bot_token', '')
+        self.bot = None
+        
         # 线程
         self.watch_thread = None
         self.cron_thread = None
+        self.bot_thread = None
         
         # 上次执行时间
         self.last_cron_time = None
@@ -108,6 +114,14 @@ class Scheduler:
             self.cron_thread.start()
         else:
             print("⏸️  定时任务: 已禁用")
+        
+        # 启动 Telegram Bot
+        if self.bot_enabled:
+            print(f"✅ Telegram Bot: 已启用（交互控制）")
+            self.bot_thread = threading.Thread(target=self._bot_loop, daemon=True)
+            self.bot_thread.start()
+        else:
+            print("⏸️  Telegram Bot: 已禁用")
         
         print("=" * 60)
         print("💡 提示: 使用 docker stop 停止容器")
@@ -205,6 +219,29 @@ class Scheduler:
                 print(f"❌ 调度器错误: {e}")
                 time.sleep(60)
     
+    def _bot_loop(self):
+        """Telegram Bot 循环"""
+        try:
+            from modules.telegram_bot import TelegramBot
+            
+            telegram_config = self.controller.config_manager.get('telegram', {})
+            bot_token = telegram_config.get('bot_token', '')
+            
+            if not bot_token:
+                print("⚠️  Telegram Bot Token 未配置，跳过启动")
+                return
+            
+            print("🤖 正在启动 Telegram Bot...")
+            self.bot = TelegramBot(bot_token, self.controller)
+            
+            # 在单独的线程中运行 Bot
+            self.bot.run()
+            
+        except Exception as e:
+            print(f"❌ Telegram Bot 启动失败: {e}")
+            import traceback
+            traceback.print_exc()
+    
     def stop(self):
         """停止调度器"""
         print("\n⏹️  正在停止调度器...")
@@ -215,5 +252,14 @@ class Scheduler:
         
         if self.cron_thread:
             self.cron_thread.join(timeout=2)
+        
+        if self.bot and self.bot_thread:
+            try:
+                # 停止 Bot
+                if hasattr(self.bot, 'application') and self.bot.application:
+                    self.bot.application.stop()
+            except Exception as e:
+                print(f"⚠️  停止 Bot 时出错: {e}")
+            self.bot_thread.join(timeout=2)
         
         print("✅ 调度器已停止")

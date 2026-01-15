@@ -1,3 +1,10 @@
+```
+    ___  _       ____  ___________  __  ____________
+   / _ | | |     / / / <  / ____/  |/  / ___/_  __/
+  / __ | | | /| / / / // /___ / /|_/ /\__ \ / /   
+ /_/ |_| |_|/ |/ /_/_//_/____//_/  /_/___/ /_/    
+```
+
 # AW115MST
 
 **AW 115 Media Scan Tool** - 智能的 115 网盘秒传检测工具
@@ -136,7 +143,7 @@ scheduler:
     interval: "30m"         # 间隔（5m, 30m, 1h, 6h 等）
 ```
 
-### Telegram 通知
+### Telegram 通知与 Bot
 
 ```yaml
 telegram:
@@ -146,12 +153,19 @@ telegram:
   notify_on_complete: true         # 处理完成时通知
   notify_on_error: true            # 发生错误时通知
   notify_on_rapid: false           # 每个可秒传文件都通知
-  bot_mode: true                   # 启用 Bot 交互模式
 ```
+
+**功能说明**：
+- `enabled: true` + 配置了 `bot_token` 和 `chat_id`：
+  - ✅ 自动发送通知消息
+  - ✅ 自动启动 Bot 交互控制（可通过 Telegram 远程控制）
+- `enabled: false`：所有 Telegram 功能禁用
 
 完整配置参考：[config.yaml.example](config/config.yaml.example)
 
 ## 🛠️ 命令行使用
+
+### 本地运行
 
 ```bash
 # 默认模式（实时监控 + 定时任务）
@@ -175,21 +189,50 @@ python main_cli.py --clean-processed
 # 测试 Telegram 通知
 python main_cli.py --test-telegram
 
-# 启动 Telegram Bot
+# 仅启动 Telegram Bot（不运行调度器）
 python main_cli.py --telegram-bot
 
 # 查看帮助
 python main_cli.py --help
 ```
 
-## 🤖 Telegram Bot 功能
+### Docker 容器
+
+```bash
+# 容器默认运行：实时监控 + 定时任务 + Telegram 通知（如果配置）
+
+# 查看日志
+docker-compose logs -f
+
+# 重启容器
+docker-compose restart
+
+# 停止容器
+docker-compose down
+
+# 进入容器执行命令
+docker exec -it aw115mst python main_cli.py --recheck
+docker exec -it aw115mst python main_cli.py --clean-processed
+```
+
+## 🤖 Telegram Bot 交互控制
+
+Telegram Bot 会在配置后**自动启动**，无需额外操作。
 
 ### 设置 Bot
 
 1. 与 [@BotFather](https://t.me/BotFather) 对话创建 Bot，获取 Token
 2. 与 [@userinfobot](https://t.me/userinfobot) 对话获取你的 Chat ID
-3. 配置 `config.yaml` 中的 `telegram` 部分
-4. 启动 Bot：`python main_cli.py --telegram-bot`
+3. 配置 `config.yaml`：
+```yaml
+telegram:
+  enabled: true
+  bot_token: "YOUR_BOT_TOKEN"
+  chat_id: "YOUR_CHAT_ID"
+```
+4. 启动程序（Bot 会自动启动）：
+   - **Docker**: `docker-compose up -d`
+   - **本地**: `python main_cli.py`
 
 ### Bot 命令
 
@@ -197,11 +240,18 @@ python main_cli.py --help
 - `/status` - 查看系统状态
 - `/scan` - 立即扫描 input 目录
 - `/recheck` - 立即重检 non_rapid 目录
-- `/stats` - 查看文件统计
-- `/files` - 查看最近检测的文件
-- `/system` - 查看系统信息（CPU、内存、磁盘）
-- `/notify` - 配置通知选项
-- `/help` - 查看帮助
+
+### Bot 菜单功能
+
+- 📊 **查看状态** - 文件分布、系统运行状态
+- 🔍 **立即检测** - 手动扫描 input 目录（等同 `--manual`）
+- 🔄 **重新检测** - 手动重检 non_rapid 目录（等同 `--recheck`）
+- 🧹 **清理记录** - 清理已处理文件标记（等同 `--clean-processed`）
+- 📈 **查看统计** - 文件统计、秒传率
+- 📁 **文件列表** - 最近检测的文件
+- ⚙️ **系统信息** - CPU、内存、磁盘使用情况
+- 🔔 **通知设置** - 配置通知选项
+- ❓ **帮助** - 查看帮助信息
 
 ## 📊 工作流程
 
