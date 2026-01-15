@@ -53,6 +53,7 @@ mkdir -p config input rapid non_rapid logs data
 ```bash
 docker run -d \
   --name aw115mst \
+  --restart unless-stopped \
   -v $(pwd)/config:/app/config:ro \
   -v $(pwd)/input:/app/input \
   -v $(pwd)/rapid:/app/rapid \

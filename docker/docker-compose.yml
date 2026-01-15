@@ -12,8 +12,9 @@ services:
       - ../rapid:/app/rapid
       - ../non_rapid:/app/non_rapid
       - ../logs:/app/logs
-      # 数据文件（断点续传和重新检测记录）
-      - ./data/checkpoint.json:/app/data/checkpoint.json
-      - ./data/recheck.json:/app/data/recheck.json
+      # 数据目录（断点续传和重新检测记录）
+      - ../data:/app/data
     environment:
       - TZ=Asia/Shanghai
+    restart: unless-stopped
+
