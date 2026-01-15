@@ -1,7 +1,6 @@
 <div align="center">
-  <img src="logo.svg" alt="AW115MST Logo" width="400"/>
+  <img src="logo.svg" alt="AW115MST Logo" width="600"/>
   
-  <h1>AW115MST</h1>
   <p><strong>AW 115 Media Scan Tool</strong> - 智能的 115 网盘秒传检测工具</p>
   
   <p>自动检测文件是否支持秒传，智能分类管理，支持实时监控、定时重检和 Telegram Bot 控制。</p>
