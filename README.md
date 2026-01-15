@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="logo.svg" alt="AW115MST Logo" width="600"/>
+  <img src="logo.png" alt="AW115MST Logo" width="600"/>
   
   <p><strong>AW 115 Media Scan Tool</strong> - 智能的 115 网盘秒传检测工具</p>
   
