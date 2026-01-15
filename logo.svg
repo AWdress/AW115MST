@@ -1,54 +1,109 @@
-<svg width="600" height="200" xmlns="http://www.w3.org/2000/svg">
+<svg width="800" height="300" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
+    <!-- 橙色渐变 -->
+    <linearGradient id="orangeGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ff8c00;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#ff6600;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#ff4500;stop-opacity:1" />
     </linearGradient>
-    <linearGradient id="grad2" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" style="stop-color:#f093fb;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#f5576c;stop-opacity:1" />
+    
+    <!-- 黑色到橙色渐变 -->
+    <linearGradient id="blackToOrange" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#000000;stop-opacity:1" />
+      <stop offset="70%" style="stop-color:#1a1a1a;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#ff6600;stop-opacity:0.3" />
     </linearGradient>
+    
+    <!-- 发光效果 -->
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    
+    <!-- 阴影效果 -->
+    <filter id="shadow">
+      <feDropShadow dx="4" dy="4" stdDeviation="3" flood-color="#000000" flood-opacity="0.5"/>
+    </filter>
   </defs>
   
-  <!-- 背景圆角矩形 -->
-  <rect x="10" y="10" width="580" height="180" rx="20" fill="url(#grad1)" opacity="0.1"/>
-  
-  <!-- 图标部分 - 云存储图标 -->
-  <g transform="translate(40, 60)">
-    <!-- 云朵 -->
-    <path d="M 50 40 Q 30 20, 50 10 Q 70 0, 90 10 Q 110 20, 90 40 Z" fill="url(#grad1)" opacity="0.8"/>
-    <!-- 115 数字 -->
-    <text x="35" y="35" font-family="Arial, sans-serif" font-size="24" font-weight="bold" fill="#fff">115</text>
-    <!-- 向上箭头 -->
-    <path d="M 65 50 L 65 70 M 55 60 L 65 50 L 75 60" stroke="url(#grad2)" stroke-width="4" stroke-linecap="round" fill="none"/>
+  <!-- 背景光效线条 -->
+  <g opacity="0.3">
+    <line x1="0" y1="150" x2="800" y2="150" stroke="url(#orangeGlow)" stroke-width="2"/>
+    <line x1="0" y1="160" x2="800" y2="140" stroke="url(#orangeGlow)" stroke-width="1.5"/>
+    <line x1="0" y1="170" x2="800" y2="130" stroke="url(#orangeGlow)" stroke-width="1"/>
   </g>
   
-  <!-- 文字部分 -->
-  <g transform="translate(160, 80)">
-    <!-- AW115MST 主标题 -->
-    <text x="0" y="0" font-family="'Arial Black', sans-serif" font-size="56" font-weight="900" fill="url(#grad1)">
+  <!-- 主文字 AW115MST -->
+  <g transform="translate(50, 180)">
+    <!-- 外发光层 -->
+    <text x="0" y="0" 
+          font-family="'Impact', 'Arial Black', sans-serif" 
+          font-size="140" 
+          font-weight="900"
+          font-style="italic"
+          fill="url(#orangeGlow)"
+          filter="url(#glow)"
+          opacity="0.6">
       AW115MST
     </text>
     
-    <!-- 副标题 -->
-    <text x="2" y="35" font-family="Arial, sans-serif" font-size="16" fill="#666">
-      115 Media Scan Tool
+    <!-- 主体黑色层 -->
+    <text x="0" y="0" 
+          font-family="'Impact', 'Arial Black', sans-serif" 
+          font-size="140" 
+          font-weight="900"
+          font-style="italic"
+          fill="#000000"
+          filter="url(#shadow)">
+      AW115MST
     </text>
     
-    <!-- 标签 -->
-    <g transform="translate(0, 50)">
-      <rect x="0" y="0" width="80" height="24" rx="12" fill="url(#grad2)" opacity="0.2"/>
-      <text x="40" y="17" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="url(#grad2)" text-anchor="middle">
-        智能检测
-      </text>
-      
-      <rect x="90" y="0" width="80" height="24" rx="12" fill="url(#grad1)" opacity="0.2"/>
-      <text x="130" y="17" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="url(#grad1)" text-anchor="middle">
-        自动分类
-      </text>
-    </g>
+    <!-- 橙色高光层 -->
+    <text x="0" y="0" 
+          font-family="'Impact', 'Arial Black', sans-serif" 
+          font-size="140" 
+          font-weight="900"
+          font-style="italic"
+          fill="url(#orangeGlow)"
+          opacity="0.4"
+          transform="translate(-3, -3)">
+      AW115MST
+    </text>
+    
+    <!-- 橙色描边 -->
+    <text x="0" y="0" 
+          font-family="'Impact', 'Arial Black', sans-serif" 
+          font-size="140" 
+          font-weight="900"
+          font-style="italic"
+          fill="none"
+          stroke="url(#orangeGlow)"
+          stroke-width="3">
+      AW115MST
+    </text>
   </g>
   
-  <!-- 装饰线条 -->
-  <line x1="150" y1="100" x2="150" y2="140" stroke="url(#grad1)" stroke-width="2" opacity="0.3"/>
+  <!-- 底部装饰弧线 -->
+  <path d="M 50 200 Q 400 220, 750 180" 
+        fill="none" 
+        stroke="url(#orangeGlow)" 
+        stroke-width="4"
+        opacity="0.8"
+        filter="url(#glow)"/>
+  
+  <path d="M 50 205 Q 400 225, 750 185" 
+        fill="none" 
+        stroke="#000000" 
+        stroke-width="6"
+        opacity="0.9"/>
+  
+  <!-- 速度线条效果 -->
+  <g opacity="0.4">
+    <line x1="600" y1="120" x2="780" y2="140" stroke="url(#orangeGlow)" stroke-width="3" stroke-linecap="round"/>
+    <line x1="620" y1="140" x2="790" y2="155" stroke="url(#orangeGlow)" stroke-width="2.5" stroke-linecap="round"/>
+    <line x1="640" y1="160" x2="795" y2="170" stroke="url(#orangeGlow)" stroke-width="2" stroke-linecap="round"/>
+  </g>
 </svg>
