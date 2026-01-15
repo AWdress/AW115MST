@@ -1,19 +1,17 @@
-```
-    ___  _       ____  ___________  __  ____________
-   / _ | | |     / / / <  / ____/  |/  / ___/_  __/
-  / __ | | | /| / / / // /___ / /|_/ /\__ \ / /   
- /_/ |_| |_|/ |/ /_/_//_/____//_/  /_/___/ /_/    
-```
-
-# AW115MST
-
-**AW 115 Media Scan Tool** - 智能的 115 网盘秒传检测工具
-
-自动检测文件是否支持秒传，智能分类管理，支持实时监控、定时重检和 Telegram Bot 控制。
-
-[![Docker Image](https://img.shields.io/docker/v/awdress/aw115mst?label=Docker&logo=docker)](https://hub.docker.com/r/awdress/aw115mst)
-[![GitHub Release](https://img.shields.io/github/v/release/AWdress/AW115MST)](https://github.com/AWdress/AW115MST/releases)
-[![License](https://img.shields.io/github/license/AWdress/AW115MST)](LICENSE)
+<div align="center">
+  <img src="logo.svg" alt="AW115MST Logo" width="400"/>
+  
+  <h1>AW115MST</h1>
+  <p><strong>AW 115 Media Scan Tool</strong> - 智能的 115 网盘秒传检测工具</p>
+  
+  <p>自动检测文件是否支持秒传，智能分类管理，支持实时监控、定时重检和 Telegram Bot 控制。</p>
+  
+  <p>
+    <a href="https://hub.docker.com/r/awdress/aw115mst"><img src="https://img.shields.io/docker/v/awdress/aw115mst?label=Docker&logo=docker" alt="Docker Image"></a>
+    <a href="https://github.com/AWdress/AW115MST/releases"><img src="https://img.shields.io/github/v/release/AWdress/AW115MST" alt="GitHub Release"></a>
+    <a href="LICENSE"><img src="https://img.shields.io/github/license/AWdress/AW115MST" alt="License"></a>
+  </p>
+</div>
 
 ## ✨ 主要特性
 
