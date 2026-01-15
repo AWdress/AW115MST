@@ -50,8 +50,7 @@ class FileWatcher:
         
         print(f"🔍 开始监控目录: {self.watch_path}")
         print(f"⏱️  防抖时间: {self.debounce_seconds} 秒")
-        print(f"📁 递归监控: {'是' if self.recursive else '否'}")
-        print(f"💡 提示: 按 Ctrl+C 停止监控\n")
+        print(f"📁 递归监控: {'是' if self.recursive else '否'}\n")
         
         # 启动观察者
         self.observer.schedule(

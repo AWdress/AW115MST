@@ -152,7 +152,11 @@ class RapidUploadController:
             file_info = self.file_handler.get_file_info(file_path)
             self.logger.debug(f"处理文件: {file_info['name']} ({file_info['size_human']})")
             
-            # 计算SHA-1
+            # 计算SHA-1（添加进度提示）
+            file_size_mb = file_info['size'] / (1024 * 1024)
+            if file_size_mb > 100:  # 大于 100MB 显示进度
+                print(f"  ⏳ 计算哈希: {file_info['name']} ({file_info['size_human']})...")
+            
             self.logger.debug(f"计算SHA-1: {file_info['name']}")
             filesha1 = self.file_handler.calculate_sha1(file_path)
             file_info['sha1'] = filesha1
@@ -539,7 +543,11 @@ class RapidUploadController:
             # 获取文件信息
             file_info = self.file_handler.get_file_info(file_path)
             
-            # 计算SHA-1
+            # 计算SHA-1（添加进度提示）
+            file_size_mb = file_info['size'] / (1024 * 1024)
+            if file_size_mb > 100:  # 大于 100MB 显示进度
+                print(f"  ⏳ 计算哈希: {file_info['name']} ({file_info['size_human']})...")
+            
             filesha1 = self.file_handler.calculate_sha1(file_path)
             
             # 定义二次验证函数

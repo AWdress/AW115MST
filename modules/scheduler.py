@@ -4,6 +4,8 @@
 """
 
 import time
+import signal
+import sys
 import threading
 from datetime import datetime, timedelta
 from typing import Callable, Dict, Any
@@ -73,6 +75,15 @@ class Scheduler:
         """启动调度器"""
         self.running = True
         
+        # 注册信号处理器（用于 Docker 容器优雅停止）
+        # 只在主线程中注册信号处理器
+        try:
+            signal.signal(signal.SIGTERM, self._signal_handler)
+            signal.signal(signal.SIGINT, self._signal_handler)
+        except ValueError:
+            # 不在主线程中，跳过信号注册
+            pass
+        
         print("\n" + "=" * 60)
         print("🚀 AW115MST 调度器启动")
         print("=" * 60)
@@ -99,7 +110,7 @@ class Scheduler:
             print("⏸️  定时任务: 已禁用")
         
         print("=" * 60)
-        print("💡 提示: 按 Ctrl+C 停止")
+        print("💡 提示: 使用 docker stop 停止容器")
         print("=" * 60 + "\n")
         
         # 主线程保持运行
@@ -107,7 +118,14 @@ class Scheduler:
             while self.running:
                 time.sleep(1)
         except KeyboardInterrupt:
+            print("\n⏹️  收到停止信号...")
             self.stop()
+    
+    def _signal_handler(self, signum, frame):
+        """信号处理器（用于 Docker 容器优雅停止）"""
+        print(f"\n⏹️  收到信号 {signum}，正在停止...")
+        self.stop()
+        sys.exit(0)
     
     def _watch_loop(self):
         """实时监控循环"""
@@ -118,6 +136,8 @@ class Scheduler:
         def process_callback(file_path: Path):
             """文件处理回调（实时监控到新文件）"""
             try:
+                print(f"🔍 正在检测: {file_path.name} ...")
+                
                 # 实时监控到的新文件，先检测但不移动
                 result = self.controller.check_and_record(file_path)
                 
@@ -126,8 +146,12 @@ class Scheduler:
                         print(f"✅ {file_path.name}: 可秒传（将在定时任务中移动）")
                     else:
                         print(f"📝 {file_path.name}: 不可秒传（已记录，将定时重检）")
+                else:
+                    print(f"⚠️  {file_path.name}: 检测失败 - {result.get('error', '未知错误')}")
             except Exception as e:
                 print(f"❌ {file_path.name}: 处理失败 - {e}")
+                import traceback
+                traceback.print_exc()
         
         watcher = FileWatcher(
             watch_path=input_path,
