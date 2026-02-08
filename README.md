@@ -7,7 +7,7 @@
   
   <p>
     <a href="https://hub.docker.com/r/awdress/aw115mst"><img src="https://img.shields.io/docker/v/awdress/aw115mst?label=Docker&logo=docker" alt="Docker Image"></a>
-    <a href="[https://github.com/AWdress/AW115MST/releases](https://github.com/AWdress/AW115MST/releases/tag/v1.0.0)"><img src="https://img.shields.io/github/v/release/AWdress/AW115MST" alt="GitHub Release"></a>
+    <a href="https://github.com/AWdress/AW115MST/releases/tag/v1.0.0)"><img src="https://img.shields.io/github/v/release/AWdress/AW115MST" alt="GitHub Release"></a>
     <a href="LICENSE"><img src="https://img.shields.io/github/license/AWdress/AW115MST" alt="License"></a>
   </p>
 </div>
