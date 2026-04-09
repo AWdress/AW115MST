@@ -5,6 +5,7 @@
 p115:
   cookies_file: "./config/115-cookies.txt"  # cookies文件路径
   check_for_relogin: true                   # 自动重新登录
+  target_pid: 0                             # 秒传目标目录ID（0=根目录，填写115文件夹的cid）
 
 # 文件处理配置
 file_processing:
