@@ -169,6 +169,16 @@ class RapidUploadController:
                     f.seek(start)
                     return f.read(end - start + 1)
             
+            # 计算实际目标 pid（保持子目录结构）
+            actual_pid = self.target_pid
+            if base_path:
+                try:
+                    rel_parts = file_path.parent.relative_to(base_path).parts
+                    if rel_parts:
+                        actual_pid = self.p115_client.ensure_remote_path(rel_parts, self.target_pid)
+                except ValueError:
+                    pass  # file_path 不在 base_path 下，使用默认 target_pid
+            
             # 检查秒传状态
             self.logger.debug(f"检查秒传状态: {file_info['name']}")
             result = self.p115_client.check_rapid_upload(
@@ -176,7 +186,7 @@ class RapidUploadController:
                 filesize=file_info['size'],
                 filesha1=filesha1,
                 read_range_bytes_or_hash=read_range_bytes if file_info['size'] >= 1048576 else None,
-                pid=self.target_pid,
+                pid=actual_pid,
             )
             
             if not result['success']:
@@ -465,7 +475,7 @@ class RapidUploadController:
                             continue
                     
                     # 重新检测
-                    result = self.check_and_record(file_path)
+                    result = self.check_and_record(file_path, base_path=non_rapid_dir)
                     
                     if not result.get('success'):
                         stats['skipped'] += 1
@@ -558,7 +568,7 @@ class RapidUploadController:
                 'error': str(e)
             }
 
-    def check_and_record(self, file_path: Path) -> Dict[str, Any]:
+    def check_and_record(self, file_path: Path, base_path: Optional[Path] = None) -> Dict[str, Any]:
         """
         检查文件秒传状态并记录（不移动文件）
         用于实时监控和延迟移动策略
@@ -584,13 +594,23 @@ class RapidUploadController:
                     f.seek(start)
                     return f.read(end - start + 1)
             
+            # 计算实际目标 pid（保持子目录结构）
+            actual_pid = self.target_pid
+            if base_path:
+                try:
+                    rel_parts = file_path.parent.relative_to(base_path).parts
+                    if rel_parts:
+                        actual_pid = self.p115_client.ensure_remote_path(rel_parts, self.target_pid)
+                except ValueError:
+                    pass
+            
             # 检查秒传状态
             result = self.p115_client.check_rapid_upload(
                 filename=file_info['name'],
                 filesize=file_info['size'],
                 filesha1=filesha1,
                 read_range_bytes_or_hash=read_range_bytes if file_info['size'] >= 1048576 else None,
-                pid=self.target_pid,
+                pid=actual_pid,
             )
             
             if not result['success']:
@@ -700,7 +720,7 @@ class RapidUploadController:
                         continue
                 
                 # 检查文件状态（check_and_record 内部会更新并写入磁盘）
-                result = self.check_and_record(file_path)
+                result = self.check_and_record(file_path, base_path=input_path)
                 
                 if not result.get('success'):
                     continue

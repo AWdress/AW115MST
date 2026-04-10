@@ -29,6 +29,10 @@ class P115ClientWrapper:
         self.request_timeout = config.get('request_timeout', 10)
         self.retry_times = config.get('retry_times', 3)
         self.retry_delay = config.get('retry_delay', 2)
+        
+        # 本次运行的远程目录 ID 缓存，避免重复 API 调用
+        # key: (parent_pid, dir_name)  value: cid
+        self._remote_dir_cache: dict = {}
     
     def check_rapid_upload(self, filename: str, filesize: int, filesha1: str,
                           read_range_bytes_or_hash: Optional[callable] = None,
@@ -148,6 +152,63 @@ class P115ClientWrapper:
                 'success': False,
                 'error': str(e),
             }
+    
+    def ensure_remote_path(self, parts: tuple, base_pid: int) -> int:
+        """
+        确保 115 上存在指定多级路径，不存在则逐级创建。返回最终目录的 cid。
+        
+        :param parts: 目录名称元组，如 ('电影', '2026')
+        :param base_pid: 起始父目录 ID（通常为 target_pid）
+        :return: 最终目录 cid
+        """
+        current_pid = base_pid
+        for name in parts:
+            cache_key = (current_pid, name)
+            if cache_key in self._remote_dir_cache:
+                current_pid = self._remote_dir_cache[cache_key]
+                continue
+            
+            # 尝试新建目录
+            resp = self.client.fs_mkdir({"cname": name, "pid": current_pid})
+            if resp.get("state"):
+                cid = int(resp["data"]["cid"])
+            else:
+                # 目录可能已存在，在列表中搜索
+                cid = self._find_dir_cid(current_pid, name)
+                if cid is None:
+                    raise RuntimeError(
+                        f"无法在115创建或找到目录: {name}（上级 pid={current_pid}）"
+                    )
+            
+            self._remote_dir_cache[cache_key] = cid
+            current_pid = cid
+        
+        return current_pid
+    
+    def _find_dir_cid(self, parent_pid: int, name: str) -> Optional[int]:
+        """
+        在 115 指定目录下按名称查找子目录，返回其 cid（不存在返回 None）。
+        """
+        offset = 0
+        while True:
+            resp = self.client.fs_files({
+                "cid": parent_pid,
+                "show_dir": 1,
+                "nf": "1",   # 不显示文件，只看目录
+                "limit": 1150,
+                "offset": offset,
+            })
+            items = resp.get("data", [])
+            if not items:
+                break
+            for item in items:
+                # 目录没有 fid 字段，文件有
+                if item.get("n") == name and "fid" not in item:
+                    return int(item["cid"])
+            if len(items) < 1150:
+                break
+            offset += 1150
+        return None
     
     def check_login_status(self) -> bool:
         """检查登录状态"""
