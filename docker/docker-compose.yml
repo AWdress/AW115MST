@@ -3,14 +3,14 @@ version: '3.8'
 services:
   aw115mst:
     image: awdress/aw115mst:latest
-    container_name: aw115mst
+    container_name: AW115MST
     volumes:
       # 配置文件
       - ../config:/app/config:ro
       # 工作目录
-      - ../input:/app/input
-      - ../rapid:/app/rapid
-      - ../non_rapid:/app/non_rapid
+      - ../待检测:/app/待检测
+      - ../可秒传:/app/可秒传
+      - ../待秒传:/app/待秒传
       - ../logs:/app/logs
       # 数据目录（断点续传和重新检测记录）
       - ../data:/app/data

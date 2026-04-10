@@ -25,9 +25,9 @@
 
 ```
 AW115MST/
-├── input/          # 待检测文件目录
-├── rapid/          # 可秒传文件目录
-├── non_rapid/      # 不可秒传文件目录
+├── 待检测/         # 待检测文件目录
+├── 可秒传/         # 可秒传文件目录
+├── 待秒传/         # 不可秒传文件目录
 ├── logs/           # 日志文件
 ├── data/           # 数据文件（断点、重检记录）
 └── config/         # 配置文件
@@ -113,12 +113,12 @@ file_processing:
 ```
 
 **移动模式**（默认）
-- 可秒传文件：移动到 `rapid/`
-- 不可秒传文件：检测 N 次后移动到 `non_rapid/`，继续重检
+- 可秒传文件：移动到 `可秒传/`
+- 不可秒传文件：检测 N 次后移动到 `待秒传/`，继续重检
 
 **复制模式**
-- 可秒传文件：复制到 `rapid/`，原文件保留
-- 不可秒传文件：保留在 `input/`，继续重检
+- 可秒传文件：复制到 `可秒传/`，原文件保留
+- 不可秒传文件：保留在 `待检测/`，继续重检
 
 ### 延迟移动策略
 
@@ -177,7 +177,7 @@ python main_cli.py --manual --input /path/to/files
 # 仅检查不移动
 python main_cli.py --manual --check-only
 
-# 重新检测 non_rapid 目录
+# 重新检测 待秒传 目录
 python main_cli.py --recheck
 
 # 清理已处理文件记录（复制模式）
@@ -235,14 +235,14 @@ telegram:
 
 - `/start` - 显示控制面板
 - `/status` - 查看系统状态
-- `/scan` - 立即扫描 input 目录
-- `/recheck` - 立即重检 non_rapid 目录
+- `/scan` - 立即扫描 待检测 目录
+- `/recheck` - 立即重检 待秒传 目录
 
 ### Bot 菜单功能
 
 - 📊 **查看状态** - 文件分布、系统运行状态
-- 🔍 **立即检测** - 手动扫描 input 目录（等同 `--manual`）
-- 🔄 **重新检测** - 手动重检 non_rapid 目录（等同 `--recheck`）
+- 🔍 **立即检测** - 手动扫描 待检测 目录（等同 `--manual`）
+- 🔄 **重新检测** - 手动重检 待秒传 目录（等同 `--recheck`）
 - 🧹 **清理记录** - 清理已处理文件标记（等同 `--clean-processed`）
 - 📈 **查看统计** - 文件统计、秒传率
 - 📁 **文件列表** - 最近检测的文件
@@ -255,31 +255,31 @@ telegram:
 ### 移动模式（默认）
 
 ```
-input/movie.mkv
+待检测/movie.mkv
   ↓ 实时监控检测
   ↓ 定时任务重检（第1次）
   ↓ 定时任务重检（第2次）
   ↓ 定时任务重检（第3次）
-  ├─ ✅ 可秒传 → 移动到 rapid/movie.mkv
-  └─ ⚠️ 不可秒传 → 移动到 non_rapid/movie.mkv
+  ├─ ✅ 可秒传 → 移动到 可秒传/movie.mkv
+  └─ ⚠️ 不可秒传 → 移动到 待秒传/movie.mkv
        ↓ 继续定时重检
-       └─ ✅ 变为可秒传 → 移动到 rapid/movie.mkv
+       └─ ✅ 变为可秒传 → 移动到 可秒传/movie.mkv
 ```
 
 ### 复制模式
 
 ```
-input/movie.mkv
+待检测/movie.mkv
   ↓ 实时监控检测
   ↓ 定时任务重检（第1次）
   ↓ 定时任务重检（第2次）
   ↓ 定时任务重检（第3次）
-  ├─ ✅ 可秒传 → 复制到 rapid/movie.mkv
-  │              原文件保留在 input/
+  ├─ ✅ 可秒传 → 复制到 可秒传/movie.mkv
+  │              原文件保留在 待检测/
   │              标记已处理，不再重复检测
-  └─ ⚠️ 不可秒传 → 保留在 input/movie.mkv
+  └─ ⚠️ 不可秒传 → 保留在 待检测/movie.mkv
        ↓ 重置计数，继续定时重检
-       └─ ✅ 变为可秒传 → 复制到 rapid/movie.mkv
+       └─ ✅ 变为可秒传 → 复制到 可秒传/movie.mkv
 ```
 
 ## 🔍 故障排查
@@ -292,7 +292,7 @@ input/movie.mkv
 
 检查目录挂载权限，确保容器有读写权限：
 ```bash
-chmod -R 755 input rapid non_rapid logs data
+chmod -R 755 待检测 可秒传 待秒传 logs data
 ```
 
 ### Telegram 通知不工作

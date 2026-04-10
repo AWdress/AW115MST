@@ -145,7 +145,7 @@ class Scheduler:
         """实时监控循环"""
         from .file_watcher import FileWatcher
         
-        input_path = Path('./input')
+        input_path = Path(self.controller.config_manager.get('file_processing.input_dir', './待检测'))
         
         def process_callback(file_path: Path):
             """文件处理回调（实时监控到新文件）"""
@@ -185,9 +185,9 @@ class Scheduler:
                     current_time = time.time()
                     print(f"\n⏰ [{datetime.now().strftime('%H:%M:%S')}] 定时任务开始...")
                     
-                    # 1. 检测并移动 input 目录中的文件
+                    # 1. 检测并移动 待检测 目录中的文件
                     try:
-                        print("  📂 检测 input 目录...")
+                        print("  📂 检测 待检测 目录...")
                         result = self.controller.process_input_with_delay()
                         if result.get('success'):
                             rapid = result.get('rapid_moved', 0)

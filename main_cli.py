@@ -64,8 +64,8 @@ def main():
     
     parser.add_argument(
         '-i', '--input',
-        default='./input',
-        help='输入路径（待检测文件目录，默认: ./input）'
+        default='./待检测',
+        help='输入路径（待检测文件目录，默认: ./待检测）'
     )
     
     parser.add_argument(
@@ -163,8 +163,8 @@ def main():
     input_path = Path(args.input)
     if not input_path.exists():
         print(f"错误: 输入路径不存在: {input_path}")
-        if args.input == './input':
-            print(f"提示: 默认扫描 ./input 目录，请将待检测文件放入该目录")
+        if args.input == './待检测':
+            print(f"提示: 默认扫描 ./待检测 目录，请将待检测文件放入该目录")
         sys.exit(1)
     
     # 检查配置文件

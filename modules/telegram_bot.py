@@ -112,9 +112,10 @@ class TelegramBot:
                     recheck_data = json.load(f)
             
             # 统计各目录文件数
-            input_path = Path('./input')
-            rapid_path = Path('./rapid')
-            non_rapid_path = Path('./non_rapid')
+            move_strategy = self.controller.config_manager.get('file_processing.move_strategy', {})
+            input_path = Path(self.controller.config_manager.get('file_processing.input_dir', './待检测'))
+            rapid_path = Path(move_strategy.get('rapid_files_dir', './可秒传'))
+            non_rapid_path = Path(move_strategy.get('non_rapid_files_dir', './待秒传'))
             
             input_files = len(list(input_path.rglob('*'))) if input_path.exists() else 0
             rapid_files = len(list(rapid_path.rglob('*'))) if rapid_path.exists() else 0
@@ -128,9 +129,9 @@ class TelegramBot:
 📊 <b>系统状态</b>
 
 📁 <b>文件分布：</b>
-• Input 目录: {input_files} 个文件
-• Rapid 目录: {rapid_files} 个文件
-• Non-Rapid 目录: {non_rapid_files} 个文件
+• 待检测目录: {input_files} 个文件
+• 可秒传目录: {rapid_files} 个文件
+• 待秒传目录: {non_rapid_files} 个文件
 
 ⏳ <b>待处理：</b>
 • 待检测文件: {pending_files} 个

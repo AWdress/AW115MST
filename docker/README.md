@@ -37,13 +37,13 @@ touch docker/data/checkpoint.json docker/data/recheck.json
 # 进入 docker 目录
 cd docker
 
-# 检测 input 目录并自动分类
+# 检测 待检测 目录并自动分类
 docker-compose run --rm aw115mst python main_cli.py
 
 # 仅检查不移动
 docker-compose run --rm aw115mst python main_cli.py --check-only
 
-# 重新检测 non_rapid 目录
+# 重新检测 待秒传 目录
 docker-compose run --rm aw115mst python main_cli.py --recheck
 ```
 
@@ -86,9 +86,9 @@ crontab -e
 | 容器路径 | 主机路径 | 说明 |
 |---------|---------|------|
 | `/app/config` | `../config` | 配置文件（只读） |
-| `/app/input` | `../input` | 待检测文件 |
-| `/app/rapid` | `../rapid` | 可秒传文件输出 |
-| `/app/non_rapid` | `../non_rapid` | 不可秒传文件输出 |
+| `/app/待检测` | `../待检测` | 待检测文件 |
+| `/app/可秒传` | `../可秒传` | 可秒传文件输出 |
+| `/app/待秒传` | `../待秒传` | 不可秒传文件输出 |
 | `/app/logs` | `../logs` | 日志文件 |
 | `/app/data/checkpoint.json` | `./data/checkpoint.json` | 断点续传记录 |
 | `/app/data/recheck.json` | `./data/recheck.json` | 重新检测记录 |
@@ -99,14 +99,14 @@ crontab -e
 
 ```bash
 # 1. 放入文件
-cp /path/to/files/* ../input/
+cp /path/to/files/* ../待检测/
 
 # 2. 运行检测
 docker-compose run --rm aw115mst python main_cli.py
 
 # 3. 查看结果
-ls ../rapid/
-ls ../non_rapid/
+ls ../可秒传/
+ls ../待秒传/
 ```
 
 ### 示例 2：定时任务（Cron）
@@ -148,7 +148,7 @@ environment:
 
 ```bash
 # 修改目录权限
-chmod -R 755 ../input ../rapid ../non_rapid ../logs
+chmod -R 755 ../待检测 ../可秒传 ../待秒传 ../logs
 chmod -R 755 data/
 ```
 

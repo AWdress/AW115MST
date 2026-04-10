@@ -201,8 +201,10 @@ class RapidUploadController:
                 # 移动文件
                 if move_files and target_dir:
                     try:
-                        keep_structure = self.config_manager.get('file_processing.move_strategy.create_subdirs', True)
+                        delete_after_rapid = self.config_manager.get('file_processing.move_strategy.delete_after_rapid', False)
+                        delete_source = self.config_manager.get('file_processing.move_strategy.delete_source_after_rapid', False)
                         use_copy = self.config_manager.get('file_processing.move_strategy.use_copy', False)
+                        keep_structure = self.config_manager.get('file_processing.move_strategy.create_subdirs', True)
                         new_path = self.file_handler.move_or_copy_file(
                             file_path, target_dir,
                             keep_structure=keep_structure,
@@ -211,13 +213,22 @@ class RapidUploadController:
                         )
                         file_info['target_path'] = str(new_path)
                         self.stats['moved'] += 1
-                        action = "已复制" if use_copy else "已移动"
-                        self.logger.success(f"✓ {file_info['name']}: 可秒传，{action}")
+                        suffix_parts = []
+                        if delete_after_rapid:
+                            new_path.unlink(missing_ok=True)
+                            suffix_parts.append("暂存副本已删除")
+                        else:
+                            action = "已复制" if use_copy else "已移动"
+                            suffix_parts.append(f"{action}到 {target_dir.name}/")
+                        if delete_source and use_copy:
+                            file_path.unlink()
+                            suffix_parts.append("原文件已删除")
+                        self.logger.success(f"✓ [秒传成功] {file_info['name']}: 115已入库，{'，'.join(suffix_parts)}")
                     except Exception as e:
-                        file_info['note'] += f" | 移动失败: {str(e)}"
-                        self.logger.error(f"✗ {file_info['name']}: 移动失败 - {str(e)}")
+                        file_info['note'] += f" | 操作失败: {str(e)}"
+                        self.logger.error(f"✗ {file_info['name']}: 操作失败 - {str(e)}")
                 else:
-                    self.logger.success(f"✓ {file_info['name']}: 可秒传")
+                    self.logger.success(f"✓ [秒传成功] {file_info['name']}: 115已入库")
                 
                 self.logger.add_rapid_file(file_info)
                 
@@ -230,7 +241,7 @@ class RapidUploadController:
                 # 根据配置决定是否移动
                 keep_in_place = self.config_manager.get('file_processing.move_strategy.keep_non_rapid_in_place', True)
                 if not keep_in_place and move_files:
-                    non_rapid_dir = Path(self.config_manager.get('file_processing.move_strategy.non_rapid_files_dir', './non_rapid'))
+                    non_rapid_dir = Path(self.config_manager.get('file_processing.move_strategy.non_rapid_files_dir', './待秒传'))
                     try:
                         keep_structure = self.config_manager.get('file_processing.move_strategy.create_subdirs', True)
                         use_copy = self.config_manager.get('file_processing.move_strategy.use_copy', False)
@@ -291,7 +302,7 @@ class RapidUploadController:
         if target_path:
             target_dir = Path(target_path)
         else:
-            target_dir = Path(self.config_manager.get('file_processing.move_strategy.rapid_files_dir', './rapid_files'))
+            target_dir = Path(self.config_manager.get('file_processing.move_strategy.rapid_files_dir', './可秒传'))
         
         # 扫描文件
         self.logger.info(f"扫描文件: {input_path}")
@@ -384,22 +395,22 @@ class RapidUploadController:
                 with open(recheck_file, 'r', encoding='utf-8') as f:
                     recheck_data = json.load(f)
             
-            # 获取 non_rapid 目录
+            # 获取 待秒传 目录
             move_strategy = self.config_manager.get('file_processing.move_strategy', {})
-            non_rapid_dir = Path(move_strategy.get('non_rapid_files_dir', './non_rapid'))
+            non_rapid_dir = Path(move_strategy.get('non_rapid_files_dir', './待秒传'))
             
             if not non_rapid_dir.exists():
                 return {
                     'success': False,
-                    'error': f'non_rapid 目录不存在: {non_rapid_dir}'
+                    'error': f'待秒传 目录不存在: {non_rapid_dir}'
                 }
             
             # 扫描文件
-            self.logger.info(f"扫描 non_rapid 目录: {non_rapid_dir}")
+            self.logger.info(f"扫描 待秒传 目录: {non_rapid_dir}")
             files = self.file_handler.scan_files(non_rapid_dir, recursive=True)
             
             if not files:
-                self.logger.warning("non_rapid 目录中没有文件")
+                self.logger.warning("待秒传 目录中没有文件")
                 return {
                     'success': True,
                     'total': 0,
@@ -419,7 +430,7 @@ class RapidUploadController:
             }
             
             # 处理文件
-            rapid_dir = Path(move_strategy.get('rapid_files_dir', './rapid'))
+            rapid_dir = Path(move_strategy.get('rapid_files_dir', './可秒传'))
             rapid_dir.mkdir(parents=True, exist_ok=True)
             
             current_time = datetime.now().timestamp()
@@ -476,9 +487,11 @@ class RapidUploadController:
                     if result['can_rapid']:
                         # 变成可秒传，移动到 rapid 目录
                         try:
-                            keep_structure = self.config_manager.get('file_processing.move_strategy.create_subdirs', True)
+                            delete_after_rapid = self.config_manager.get('file_processing.move_strategy.delete_after_rapid', False)
+                            delete_source = self.config_manager.get('file_processing.move_strategy.delete_source_after_rapid', False)
                             use_copy = self.config_manager.get('file_processing.move_strategy.use_copy', False)
-                            
+                            keep_structure = self.config_manager.get('file_processing.move_strategy.create_subdirs', True)
+
                             # 使用统一的移动/复制方法
                             new_path = self.file_handler.move_or_copy_file(
                                 file_path, rapid_dir,
@@ -486,9 +499,17 @@ class RapidUploadController:
                                 base_path=non_rapid_dir,
                                 use_copy=use_copy
                             )
-                            
-                            action = "已复制" if use_copy else "已移动"
-                            self.logger.success(f"✓ {file_path.name}: 现在可秒传！{action}到 rapid/")
+                            suffix_parts = []
+                            if delete_after_rapid:
+                                new_path.unlink(missing_ok=True)
+                                suffix_parts.append("暂存副本已删除")
+                            else:
+                                action = "已复制" if use_copy else "已移动"
+                                suffix_parts.append(f"{action}到 {rapid_dir.name}/")
+                            if delete_source and use_copy:
+                                file_path.unlink()
+                                suffix_parts.append("原文件已删除")
+                            self.logger.success(f"✓ [秒传成功] {file_path.name}: 现在可秒传！115已入库，{'，'.join(suffix_parts)}")
                             stats['now_rapid'] += 1
                             
                             # 从记录中删除（已经可秒传了）
@@ -499,7 +520,7 @@ class RapidUploadController:
                                 self.telegram.notify_rapid_file(file_path.name)
                                 
                         except Exception as e:
-                            self.logger.error(f"✗ {file_path.name}: 移动失败: {e}")
+                            self.logger.error(f"✗ {file_path.name}: 操作失败: {e}")
                     else:
                         self.logger.info(f"○ {file_path.name}: 仍不可秒传")
                         stats['still_non_rapid'] += 1
@@ -622,9 +643,9 @@ class RapidUploadController:
         :return: 处理结果
         """
         try:
-            input_path = Path('./input')
+            input_path = Path(self.config_manager.get('file_processing.input_dir', './待检测'))
             if not input_path.exists():
-                return {'success': False, 'error': 'input 目录不存在'}
+                return {'success': False, 'error': f'输入目录不存在: {input_path}'}
             
             # 检查登录状态
             if not self.check_login():
@@ -656,8 +677,8 @@ class RapidUploadController:
             
             # 目标目录
             move_strategy = self.config_manager.get('file_processing.move_strategy', {})
-            rapid_dir = Path(move_strategy.get('rapid_files_dir', './rapid'))
-            non_rapid_dir = Path(move_strategy.get('non_rapid_files_dir', './non_rapid'))
+            rapid_dir = Path(move_strategy.get('rapid_files_dir', './可秒传'))
+            non_rapid_dir = Path(move_strategy.get('non_rapid_files_dir', './待秒传'))
             rapid_dir.mkdir(parents=True, exist_ok=True)
             non_rapid_dir.mkdir(parents=True, exist_ok=True)
             
@@ -689,8 +710,10 @@ class RapidUploadController:
                 use_copy = self.config_manager.get('file_processing.move_strategy.use_copy', False)
                 
                 if can_rapid:
-                    # 可秒传：移动或复制到 rapid/
+                    # 可秒传：移动/复制到 可秒传/，按开关决定是否删除副本和源文件
                     try:
+                        delete_after_rapid = self.config_manager.get('file_processing.move_strategy.delete_after_rapid', False)
+                        delete_source = self.config_manager.get('file_processing.move_strategy.delete_source_after_rapid', False)
                         keep_structure = self.config_manager.get('file_processing.move_strategy.create_subdirs', True)
                         new_path = self.file_handler.move_or_copy_file(
                             file_path, rapid_dir,
@@ -698,13 +721,22 @@ class RapidUploadController:
                             base_path=input_path,
                             use_copy=use_copy
                         )
-                        action = "已复制" if use_copy else "已移动"
-                        self.logger.success(f"✓ {file_path.name}: 可秒传，{action}到 rapid/")
+                        suffix_parts = []
+                        if delete_after_rapid:
+                            new_path.unlink(missing_ok=True)
+                            suffix_parts.append("暂存副本已删除")
+                        else:
+                            action = "已复制" if use_copy else "已移动"
+                            suffix_parts.append(f"{action}到 {rapid_dir.name}/")
+                        if delete_source and use_copy:
+                            file_path.unlink()
+                            suffix_parts.append("原文件已删除")
+                        self.logger.success(f"✓ [秒传成功] {file_path.name}: 115已入库，{'，'.join(suffix_parts)}")
                         stats['rapid_moved'] += 1
-                        
+
                         # 记录需要在最终保存时应用的变更
-                        if use_copy:
-                            # 复制模式：标记为已处理，保留记录避免重复检测
+                        if use_copy and not delete_source:
+                            # 复制模式且不删源：标记为已处理，保留记录避免重复检测
                             rapid_copy_updates[file_key] = {
                                 'processed': True,
                                 'last_status': 'rapid',
@@ -712,7 +744,7 @@ class RapidUploadController:
                                 'target_path': str(new_path),
                             }
                         else:
-                            # 移动模式：文件已不在 input 目录，删除记录
+                            # 移动模式或已删源：文件已不在 input，删除记录
                             keys_to_delete.add(file_key)
                         
                         # 发送 Telegram 通知
@@ -720,14 +752,14 @@ class RapidUploadController:
                             self.telegram.notify_rapid_file(file_path.name)
                             
                     except Exception as e:
-                        self.logger.error(f"✗ {file_path.name}: 移动失败 - {e}")
+                        self.logger.error(f"✗ {file_path.name}: 操作失败 - {e}")
                         
                 else:
                     # 不可秒传：检查是否达到延迟移动次数
                     if check_count >= self.delay_move_times:
                         if use_copy:
                             # 复制模式：不移动文件，重置计数继续重检
-                            self.logger.info(f"○ {file_path.name}: 检测 {check_count} 次仍不可秒传（保留在 input，继续重检）")
+                            self.logger.info(f"○ {file_path.name}: 检测 {check_count} 次仍不可秒传（保留在 待检测/，继续重检）")
                             keys_to_reset.add(file_key)
                         else:
                             # 移动模式：移动到 non_rapid/
@@ -739,7 +771,7 @@ class RapidUploadController:
                                     base_path=input_path,
                                     use_copy=False
                                 )
-                                self.logger.info(f"○ {file_path.name}: 检测 {check_count} 次仍不可秒传，已移动到 non_rapid/")
+                                self.logger.info(f"○ {file_path.name}: 检测 {check_count} 次仍不可秒传，已移动到 {non_rapid_dir.name}/")
                                 stats['non_rapid_moved'] += 1
                                 keys_to_rename[file_key] = str(new_path.absolute())
                                     
