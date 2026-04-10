@@ -13,6 +13,40 @@ from colorama import Fore, Style, init
 init(autoreset=True)
 
 
+class ColoredConsoleFormatter(logging.Formatter):
+    """带颜色的控制台日志格式化器"""
+    LEVEL_COLORS = {
+        logging.DEBUG:   Fore.WHITE,
+        logging.INFO:    '',
+        logging.WARNING: Fore.YELLOW,
+        logging.ERROR:   Fore.RED,
+        logging.CRITICAL: Fore.RED,
+    }
+    # 消息内容前缀到颜色的映射
+    MSG_COLORS = {
+        '✓': Fore.GREEN,
+        '⚠': Fore.YELLOW,
+        '✗': Fore.RED,
+        '⏳': Fore.CYAN,
+        '📋': Fore.CYAN,
+        '🔍': Fore.CYAN,
+    }
+
+    def format(self, record: logging.LogRecord) -> str:
+        msg = record.getMessage()
+        color = self.LEVEL_COLORS.get(record.levelno, '')
+        # 用消息前缀覆盖颜色
+        for prefix, c in self.MSG_COLORS.items():
+            if msg.startswith(prefix):
+                color = c
+                break
+        time_str = self.formatTime(record, self.datefmt)
+        line = f"{time_str} - {record.levelname} - {msg}"
+        if color:
+            return f"{color}{line}{Style.RESET_ALL}"
+        return line
+
+
 class Logger:
     """日志管理器"""
     
@@ -33,15 +67,11 @@ class Logger:
         # 清除已有的处理器
         self.logger.handlers.clear()
         
-        # 控制台处理器
+        # 控制台处理器（带颜色，无重复 print）
         if config.get('console_output', True):
             console_handler = logging.StreamHandler()
             console_handler.setLevel(logging.INFO)
-            console_formatter = logging.Formatter(
-                '%(asctime)s - %(levelname)s - %(message)s',
-                datefmt='%H:%M:%S'
-            )
-            console_handler.setFormatter(console_formatter)
+            console_handler.setFormatter(ColoredConsoleFormatter(datefmt='%H:%M:%S'))
             self.logger.addHandler(console_handler)
         
         # 文件处理器
@@ -63,8 +93,6 @@ class Logger:
     
     def info(self, message: str, color: str = None):
         """记录INFO级别日志"""
-        if color:
-            print(f"{color}{message}{Style.RESET_ALL}")
         self.logger.info(message)
     
     def debug(self, message: str):
@@ -73,12 +101,10 @@ class Logger:
     
     def warning(self, message: str):
         """记录WARNING级别日志"""
-        print(f"{Fore.YELLOW}{message}{Style.RESET_ALL}")
         self.logger.warning(message)
     
     def error(self, message: str):
         """记录ERROR级别日志"""
-        print(f"{Fore.RED}{message}{Style.RESET_ALL}")
         self.logger.error(message)
     
     def success(self, message: str):
