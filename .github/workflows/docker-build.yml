@@ -6,9 +6,6 @@ on:
       - main
     tags:
       - 'v*'
-  pull_request:
-    branches:
-      - main
   workflow_dispatch:
 
 env:
@@ -37,8 +34,10 @@ jobs:
         with:
           images: ${{ env.DOCKER_IMAGE }}
           tags: |
+            # 推送标签时：同时打版本号 tag 和 latest
             type=semver,pattern={{version}}
-            type=raw,value=latest,enable={{is_default_branch}}
+            # 始终打 latest（推送 main 或标签均更新）
+            type=raw,value=latest
       
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
