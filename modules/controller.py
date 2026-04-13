@@ -746,6 +746,7 @@ class RapidUploadController:
             non_rapid_dir = Path(move_strategy.get('non_rapid_files_dir', './待秒传'))
             rapid_dir.mkdir(parents=True, exist_ok=True)
             non_rapid_dir.mkdir(parents=True, exist_ok=True)
+            use_copy = self.config_manager.get('file_processing.move_strategy.use_copy', False)
             
             # 跟踪循环中需要在最终保存时应用的额外变更
             # check_and_record 在每次调用后都会写磁盘，循环结束后需要 reload 再应用这些变更

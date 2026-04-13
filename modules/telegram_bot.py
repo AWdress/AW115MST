@@ -600,5 +600,9 @@ https://github.com/AWdress/AW115MST
         print("🤖 Telegram Bot 启动成功")
         print(f"📱 Bot Token: {self.bot_token[:10]}...")
         
-        # 运行 Bot
-        self.app.run_polling()
+        # 运行 Bot（如果在非主线程中运行，跳过信号处理器安装）
+        import threading
+        if threading.current_thread() is threading.main_thread():
+            self.app.run_polling()
+        else:
+            self.app.run_polling(stop_signals=())
