@@ -189,8 +189,8 @@ class RapidUploadController:
                     rel_parts = file_path.parent.relative_to(base_path).parts
                     if rel_parts:
                         actual_pid = self.p115_client.ensure_remote_path(rel_parts, self.target_pid)
-                except ValueError:
-                    pass  # file_path 不在 base_path 下，使用默认 target_pid
+                except Exception:
+                    pass  # 路径不在 base_path 下，或 115 建目录失败，回退到默认 target_pid
             
             # 检查秒传状态
             self.logger.debug(f"检查秒传状态: {file_info['name']}")
@@ -618,8 +618,8 @@ class RapidUploadController:
                     rel_parts = file_path.parent.relative_to(base_path).parts
                     if rel_parts:
                         actual_pid = self.p115_client.ensure_remote_path(rel_parts, self.target_pid)
-                except ValueError:
-                    pass
+                except Exception:
+                    pass  # 路径不在 base_path 下，或 115 建目录失败，回退到默认 target_pid
             
             # 检查秒传状态
             result = self.p115_client.check_rapid_upload(
