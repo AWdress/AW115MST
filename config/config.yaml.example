@@ -29,8 +29,7 @@ file_processing:
   # 移动策略
   move_strategy:
     rapid_files_dir: "./可秒传"             # 可秒传文件目标目录
-    non_rapid_files_dir: "./待秒传"           # 不可秒传文件目录（仅移动模式使用）
-    keep_non_rapid_in_place: false        # 不可秒传文件也移动
+    non_rapid_files_dir: "./待秒传"           # 不可秒传文件目录
     create_subdirs: true                  # 保持原有目录结构
     use_copy: false                       # 使用复制而非移动（true=复制，false=移动）
                                           # 复制模式说明：
