@@ -1,7 +1,7 @@
 ﻿FROM python:3.11-slim
 WORKDIR /app
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 TZ=Asia/Shanghai
-RUN apt-get update && apt-get install -y tzdata gcc && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y tzdata gcc libffi-dev libssl-dev && rm -rf /var/lib/apt/lists/*
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY modules/ ./modules/
