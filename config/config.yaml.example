@@ -34,7 +34,7 @@ file_processing:
     use_copy: false                       # 使用复制而非移动（true=复制，false=移动）
                                           # 复制模式说明：
                                           # - 可秒传文件：复制到 可秒传/，原文件保留
-                                          # - 不可秒传文件：保留在 input/，继续重检
+                                          # - 不可秒传文件：复制到 待秒传/，原文件保留
     delete_after_rapid: false             # 删除 可秒传/ 里的暂存副本（true=加入文库后删除副本，false=保留）
     delete_source_after_rapid: false      # 删除源文件（true=入库后删除源文件，false=保留用于做种）
 
@@ -69,8 +69,7 @@ checkpoint:
 recheck:
   enabled: true                      # 启用重新检测功能
   recheck_file: "./data/recheck.json"     # 重新检测记录文件
-  max_recheck_times: 10              # 最大重新检测次数（超过后不再检测）
-  delay_move_times: 3                # 延迟移动次数（检测N次后仍不能秒传才移动到 non_rapid）
+  max_recheck_times: 10              # 最大重新检测次数（超过后触发上传或停止检测）
 
 # Telegram 通知配置
 telegram:
@@ -86,10 +85,10 @@ telegram:
 scheduler:
   # 实时监控
   watch:
-    enabled: true                    # 启用实时监控（监控 input 目录）
+    enabled: true                    # 启用实时监控（监控 待检测/ 目录）
     debounce_seconds: 5              # 防抖时间（秒）
   
-  # 定时任务（扫描 input + 重检 non_rapid）
+  # 定时任务（扫描 待检测/ + 重检 待秒传/）
   cron:
     enabled: true                    # 启用定时任务
     interval: "30m"                  # 运行间隔（支持: 5m, 30m, 1h, 6h 等）
