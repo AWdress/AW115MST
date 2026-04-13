@@ -168,11 +168,18 @@ class RapidUploadController:
             
             # 计算SHA-1（添加进度提示）
             file_size_mb = file_info['size'] / (1024 * 1024)
-            if file_size_mb > 100:  # 大于 100MB 显示进度
+            if file_size_mb > 100:  # 大于 100MB 显示进度，每 10% 刷新一次
                 print(f"  ⏳ 计算哈希: {file_info['name']} ({file_info['size_human']})...")
-            
+                _last_pct = [0]
+                def _hash_progress(bytes_read, total, _name=file_info['name']):
+                    pct = int(bytes_read * 100 / total)
+                    if pct >= _last_pct[0] + 10:
+                        _last_pct[0] = pct - (pct % 10)
+                        print(f"         {_name}: {_last_pct[0]}%")
+                filesha1 = self.file_handler.calculate_sha1(file_path, progress_callback=_hash_progress)
+            else:
+                filesha1 = self.file_handler.calculate_sha1(file_path)
             self.logger.debug(f"计算SHA-1: {file_info['name']}")
-            filesha1 = self.file_handler.calculate_sha1(file_path)
             file_info['sha1'] = filesha1
             
             # 定义二次验证函数
@@ -629,10 +636,17 @@ class RapidUploadController:
             
             # 计算SHA-1（添加进度提示）
             file_size_mb = file_info['size'] / (1024 * 1024)
-            if file_size_mb > 100:  # 大于 100MB 显示进度
+            if file_size_mb > 100:  # 大于 100MB 显示进度，每 10% 刷新一次
                 print(f"  ⏳ 计算哈希: {file_info['name']} ({file_info['size_human']})...")
-            
-            filesha1 = self.file_handler.calculate_sha1(file_path)
+                _last_pct2 = [0]
+                def _hash_progress2(bytes_read, total, _name=file_info['name']):
+                    pct = int(bytes_read * 100 / total)
+                    if pct >= _last_pct2[0] + 10:
+                        _last_pct2[0] = pct - (pct % 10)
+                        print(f"         {_name}: {_last_pct2[0]}%")
+                filesha1 = self.file_handler.calculate_sha1(file_path, progress_callback=_hash_progress2)
+            else:
+                filesha1 = self.file_handler.calculate_sha1(file_path)
             
             # 定义二次验证函数
             def read_range_bytes(sign_check: str) -> bytes:
