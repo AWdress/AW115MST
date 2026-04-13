@@ -413,7 +413,7 @@ class RapidUploadController:
                     'error': '重新检测功能未启用，请在 config.yaml 中启用'
                 }
             
-            recheck_file = Path(recheck_config.get('recheck_file', './recheck.json'))
+            recheck_file = self.recheck_file  # 与 check_and_record / process_input_with_delay 保持同一路径
             max_recheck_times = recheck_config.get('max_recheck_times', 10)
             
             # 使用调度器的间隔时间作为重检间隔
@@ -851,6 +851,10 @@ class RapidUploadController:
                         self.logger.info(f"○ {file_path.name}: 不可秒传，{action}到 {non_rapid_dir.name}/")
                         stats['non_rapid_moved'] += 1
                         keys_to_rename[file_key] = str(new_path.absolute())
+                        # use_copy 模式下仍需删除 待检测/ 中的源文件，否则下次扫描会重复处理
+                        if use_copy:
+                            file_path.unlink(missing_ok=True)
+                            self._remove_empty_parents(file_path, input_path)
                     except Exception as e:
                         self.logger.error(f"✗ {file_path.name}: 移动失败 - {e}")
             
