@@ -416,11 +416,6 @@ class RapidUploadController:
             recheck_file = self.recheck_file  # 与 check_and_record / process_input_with_delay 保持同一路径
             max_recheck_times = recheck_config.get('max_recheck_times', 10)
             
-            # 使用调度器的间隔时间作为重检间隔
-            scheduler_config = self.config_manager.get('scheduler', {})
-            cron_interval_str = scheduler_config.get('cron', {}).get('interval', '6h')
-            file_interval = self._parse_interval(cron_interval_str)
-            
             # 加载重新检测记录
             recheck_data = {}
             if recheck_file.exists():
@@ -477,8 +472,8 @@ class RapidUploadController:
                         last_check_time = record.get('last_check_time', 0)
                         check_count = record.get('check_count', 0)
                         
-                        # 检查是否超过最大检测次数
-                        if check_count >= max_recheck_times:
+                        # 检查是否超过最大检测次数（max_recheck_times 为 0 表示不限次数）
+                        if max_recheck_times > 0 and check_count >= max_recheck_times:
                             upload_config = self.config_manager.get('upload', {})
                             if upload_config.get('enabled', False):
                                 # 达到最大次数且开启了上传：直接上传
@@ -514,18 +509,7 @@ class RapidUploadController:
                             pbar.update(1)
                             continue
                         
-                        # 检查是否到达检测间隔
-                        if current_time - last_check_time < file_interval:
-                            remaining_secs = file_interval - (current_time - last_check_time)
-                            if remaining_secs >= 3600:
-                                remaining_str = f"{int(remaining_secs / 3600)} 小时"
-                            else:
-                                remaining_str = f"{int(remaining_secs / 60)} 分钟"
-                            self.logger.info(f"⊗ {file_path.name}: 距离上次检测不足间隔时间，还需 {remaining_str}")
-                            stats['skipped'] += 1
-                            pbar.update(1)
-                            continue
-                    
+
                     # 重新检测
                     result = self.check_and_record(file_path, base_path=non_rapid_dir)
                     
@@ -768,7 +752,8 @@ class RapidUploadController:
             rapid_copy_updates: Dict[str, Dict] = {}  # file_key -> 需要 merge 的字段
             keys_to_delete: set = set()               # 需要删除的 file_key（move 模式可秒传）
             keys_to_reset: set = set()                # 需要重置 check_count 的 file_key
-            keys_to_rename: Dict[str, str] = {}       # old_file_key -> new_file_key（移到 non_rapid）
+            keys_to_rename: Dict[str, str] = {}       # old_file_key -> new_file_key（move 模式不可秒传，移到 non_rapid）
+            keys_dispatched: Dict[str, str] = {}      # 待检测/ key -> 待秒传/ key（use_copy 不可秒传，标记已分发）
             
             for file_path in files:
                 file_key = str(file_path.absolute())
@@ -779,6 +764,12 @@ class RapidUploadController:
                     if record.get('processed') and record.get('last_status') == 'rapid':
                         # 已处理的可秒传文件，跳过
                         continue
+                    if record.get('non_rapid_dispatched'):
+                        # use_copy 模式下已将副本分发到 待秒传/，验证副本是否仍存在
+                        non_rapid_path = record.get('non_rapid_path', '')
+                        if non_rapid_path and Path(non_rapid_path).exists():
+                            continue  # 副本存在，由 recheck_non_rapid_files 处理
+                        # 副本不存在（可能已秒传移走），重新处理
                 
                 # 检查文件状态（check_and_record 内部会更新并写入磁盘）
                 result = self.check_and_record(file_path, base_path=input_path)
@@ -788,7 +779,6 @@ class RapidUploadController:
                 
                 check_count = result.get('check_count', 0)
                 can_rapid = result.get('can_rapid', False)
-                use_copy = self.config_manager.get('file_processing.move_strategy.use_copy', False)
                 
                 if can_rapid:
                     # 可秒传：移动/复制到 可秒传/，按开关决定是否删除副本和源文件
@@ -850,11 +840,11 @@ class RapidUploadController:
                         action = "已复制" if use_copy else "已移动"
                         self.logger.info(f"○ {file_path.name}: 不可秒传，{action}到 {non_rapid_dir.name}/")
                         stats['non_rapid_moved'] += 1
-                        keys_to_rename[file_key] = str(new_path.absolute())
-                        # use_copy 模式下仍需删除 待检测/ 中的源文件，否则下次扫描会重复处理
                         if use_copy:
-                            file_path.unlink(missing_ok=True)
-                            self._remove_empty_parents(file_path, input_path)
+                            # use_copy 模式：源文件留在 待检测/，标记已分发避免重复划
+                            keys_dispatched[file_key] = str(new_path.absolute())
+                        else:
+                            keys_to_rename[file_key] = str(new_path.absolute())
                     except Exception as e:
                         self.logger.error(f"✗ {file_path.name}: 移动失败 - {e}")
             
@@ -877,6 +867,16 @@ class RapidUploadController:
                     recheck_data[new_key] = recheck_data.pop(old_key)
                     recheck_data[new_key]['location'] = 'non_rapid'
                     recheck_data[new_key]['check_count'] = 0
+            for input_key, non_rapid_key in keys_dispatched.items():
+                # use_copy 模式：待检测/ key 保留并标记已分发；待秒传/ key 单独建立
+                recheck_data[non_rapid_key] = {**recheck_data.get(input_key, {}),
+                                               'location': 'non_rapid', 'check_count': 0}
+                recheck_data[non_rapid_key].pop('non_rapid_dispatched', None)
+                recheck_data[non_rapid_key].pop('non_rapid_path', None)
+                recheck_data.setdefault(input_key, {}).update({
+                    'non_rapid_dispatched': True,
+                    'non_rapid_path': non_rapid_key,
+                })
             
             # 保存更新后的记录
             with open(self.recheck_file, 'w', encoding='utf-8') as f:
