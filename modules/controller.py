@@ -534,7 +534,6 @@ class RapidUploadController:
                         # 变成可秒传，移动到 rapid 目录
                         try:
                             delete_after_rapid = self.config_manager.get('file_processing.move_strategy.delete_after_rapid', False)
-                            delete_source = self.config_manager.get('file_processing.move_strategy.delete_source_after_rapid', False)
                             use_copy = self.config_manager.get('file_processing.move_strategy.use_copy', False)
                             keep_structure = self.config_manager.get('file_processing.move_strategy.create_subdirs', True)
 
@@ -553,10 +552,11 @@ class RapidUploadController:
                             else:
                                 action = "已复制" if use_copy else "已移动"
                                 suffix_parts.append(f"{action}到 {rapid_dir.name}/")
-                            if delete_source and use_copy:
+                            # use_copy 时原件留在 待秒传，成功后必须清理（待秒传只是暂存区）
+                            if use_copy and file_path.exists():
                                 file_path.unlink()
                                 self._remove_empty_parents(file_path, non_rapid_dir)
-                                suffix_parts.append("原文件已删除")
+                                suffix_parts.append("待秒传原件已清理")
                             self.logger.success(f"✓ [秒传成功] {file_path.name}: 现在可秒传！115已入库，{'，'.join(suffix_parts)}")
                             stats['now_rapid'] += 1
                             
