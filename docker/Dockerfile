@@ -1,4 +1,4 @@
-﻿FROM python:3.11-slim
+﻿FROM python:3.12-slim
 WORKDIR /app
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 TZ=Asia/Shanghai LANG=C.UTF-8 LC_ALL=C.UTF-8 PYTHONUTF8=1
 RUN apt-get update && apt-get install -y tzdata gcc libffi-dev libssl-dev && rm -rf /var/lib/apt/lists/*
