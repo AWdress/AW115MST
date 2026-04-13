@@ -534,7 +534,6 @@ class RapidUploadController:
                                 suffix_parts.append(f"{action}到 {rapid_dir.name}/")
                             if delete_source and use_copy:
                                 file_path.unlink()
-                                self._remove_empty_parents(file_path, non_rapid_dir)
                                 suffix_parts.append("原文件已删除")
                             self.logger.success(f"✓ [秒传成功] {file_path.name}: 现在可秒传！115已入库，{'，'.join(suffix_parts)}")
                             stats['now_rapid'] += 1
