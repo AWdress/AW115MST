@@ -501,7 +501,7 @@ class RapidUploadController:
                                             self._remove_empty_parents(file_path, non_rapid_dir)
                                         del recheck_data[file_key]
                                         if self.telegram.config.get('notify_on_rapid', False):
-                                            self.telegram.notify_rapid_file(f"[上传] {file_path.name}")
+                                            self.telegram.notify_rapid_file(file_path.name, action='上传')
                                     else:
                                         self.logger.error(f"✗ {file_path.name}: 上传失败 - {up_result.get('error', '')}")
                                         stats['skipped'] += 1

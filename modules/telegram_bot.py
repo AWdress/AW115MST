@@ -271,52 +271,40 @@ class TelegramBot:
     async def show_statistics(self, query):
         """显示统计信息"""
         try:
-            # 读取日志统计
-            log_dir = Path('./logs')
-            total_rapid = 0
-            total_non_rapid = 0
-            
-            if log_dir.exists():
-                # 这里可以解析日志文件获取统计
-                # 简化版本：只显示当前目录统计
-                pass
-            
-            rapid_path = Path('./rapid')
-            non_rapid_path = Path('./non_rapid')
-            
+            move_strategy = self.controller.config_manager.get('file_processing.move_strategy', {})
+            rapid_path = Path(move_strategy.get('rapid_files_dir', './可秒传'))
+            non_rapid_path = Path(move_strategy.get('non_rapid_files_dir', './待秒传'))
+
             rapid_count = len([f for f in rapid_path.rglob('*') if f.is_file()]) if rapid_path.exists() else 0
             non_rapid_count = len([f for f in non_rapid_path.rglob('*') if f.is_file()]) if non_rapid_path.exists() else 0
-            
+
             # 计算总大小
             rapid_size = sum(f.stat().st_size for f in rapid_path.rglob('*') if f.is_file()) if rapid_path.exists() else 0
             non_rapid_size = sum(f.stat().st_size for f in non_rapid_path.rglob('*') if f.is_file()) if non_rapid_path.exists() else 0
-            
+
             def format_size(size):
                 for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
                     if size < 1024.0:
                         return f"{size:.2f} {unit}"
                     size /= 1024.0
                 return f"{size:.2f} PB"
-            
-            stats_text = f"""
-📈 <b>统计信息</b>
 
-📁 <b>可秒传文件：</b>
-• 文件数: {rapid_count}
-• 总大小: {format_size(rapid_size)}
+            total_count = rapid_count + non_rapid_count
+            rate = f"{rapid_count / total_count * 100:.1f}%" if total_count > 0 else "—"
 
-📁 <b>不可秒传文件：</b>
-• 文件数: {non_rapid_count}
-• 总大小: {format_size(non_rapid_size)}
+            stats_text = (
+                f"📈 <b>统计信息</b>\n"
+                f"──────────────────\n"
+                f"✅ <b>可秒传</b>（{rapid_path.name}）\n"
+                f"   文件 {rapid_count} 个 · {format_size(rapid_size)}\n\n"
+                f"🔁 <b>待秒传</b>（{non_rapid_path.name}）\n"
+                f"   文件 {non_rapid_count} 个 · {format_size(non_rapid_size)}\n"
+                f"──────────────────\n"
+                f"📦 合计 {total_count} 个 · {format_size(rapid_size + non_rapid_size)}\n"
+                f"📊 秒传率 {rate}\n"
+                f"🕐 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            )
 
-📊 <b>总计：</b>
-• 文件总数: {rapid_count + non_rapid_count}
-• 总大小: {format_size(rapid_size + non_rapid_size)}
-• 秒传率: {(rapid_count / (rapid_count + non_rapid_count) * 100) if (rapid_count + non_rapid_count) > 0 else 0:.1f}%
-
-🕐 统计时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-"""
-            
             keyboard = [[InlineKeyboardButton("🔙 返回菜单", callback_data="back_to_menu")]]
             reply_markup = InlineKeyboardMarkup(keyboard)
             
