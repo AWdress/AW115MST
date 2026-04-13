@@ -1,5 +1,5 @@
 # Core dependencies (CLI required)
-p115client>=0.0.9
+p115client>=0.0.7
 PyYAML>=6.0
 requests>=2.31.0
 tqdm>=4.66.0
