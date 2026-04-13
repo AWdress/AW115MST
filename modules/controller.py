@@ -472,8 +472,38 @@ class RapidUploadController:
                         
                         # 检查是否超过最大检测次数
                         if check_count >= max_recheck_times:
-                            self.logger.info(f"⊗ {file_path.name}: 已达到最大检测次数({max_recheck_times})，跳过")
-                            stats['skipped'] += 1
+                            upload_config = self.config_manager.get('upload', {})
+                            if upload_config.get('enabled', False):
+                                # 达到最大次数且开启了上传：直接上传
+                                try:
+                                    upload_pid = self.target_pid
+                                    try:
+                                        rel_parts = file_path.parent.relative_to(non_rapid_dir).parts
+                                        if rel_parts:
+                                            upload_pid = self.p115_client.ensure_remote_path(rel_parts, self.target_pid)
+                                    except Exception:
+                                        pass
+                                    self.logger.info(f"⬆ {file_path.name}: 重检达到上限({max_recheck_times}次)，开始上传...")
+                                    up_result = self.p115_client.upload_file(file_path, pid=upload_pid)
+                                    if up_result['success']:
+                                        self.logger.success(f"✓ [上传成功] {file_path.name}: 已上传到115")
+                                        stats['now_rapid'] += 1
+                                        delete_after_upload = upload_config.get('delete_after_upload', True)
+                                        if delete_after_upload:
+                                            file_path.unlink(missing_ok=True)
+                                            self._remove_empty_parents(file_path, non_rapid_dir)
+                                        del recheck_data[file_key]
+                                        if self.telegram.config.get('notify_on_rapid', False):
+                                            self.telegram.notify_rapid_file(f"[上传] {file_path.name}")
+                                    else:
+                                        self.logger.error(f"✗ {file_path.name}: 上传失败 - {up_result.get('error', '')}")
+                                        stats['skipped'] += 1
+                                except Exception as e:
+                                    self.logger.error(f"✗ {file_path.name}: 上传异常 - {e}")
+                                    stats['skipped'] += 1
+                            else:
+                                self.logger.info(f"⊛ {file_path.name}: 已达到最大检测次数({max_recheck_times})，跳过")
+                                stats['skipped'] += 1
                             pbar.update(1)
                             continue
                         
@@ -794,64 +824,21 @@ class RapidUploadController:
                         self.logger.error(f"✗ {file_path.name}: 操作失败 - {e}")
                         
                 else:
-                    # 不可秒传：检查是否达到延迟移动次数
-                    if check_count >= self.delay_move_times:
-                        if use_copy:
-                            # 复制模式：不移动文件，重置计数继续重检
-                            self.logger.info(f"○ {file_path.name}: 检测 {check_count} 次仍不可秒传（保留在 待检测/，继续重检）")
-                            keys_to_reset.add(file_key)
-                        else:
-                            # 检查是否启用真实上传
-                            upload_config = self.config_manager.get('upload', {})
-                            upload_enabled = upload_config.get('enabled', False)
-
-                            if upload_enabled:
-                                try:
-                                    # 计算上传目标 pid（保持子目录结构）
-                                    upload_pid = self.target_pid
-                                    try:
-                                        rel_parts = file_path.parent.relative_to(input_path).parts
-                                        if rel_parts:
-                                            upload_pid = self.p115_client.ensure_remote_path(rel_parts, self.target_pid)
-                                    except Exception:
-                                        pass
-
-                                    self.logger.info(f"⬆ {file_path.name}: 检测 {check_count} 次不可秒传，开始上传...")
-                                    up_result = self.p115_client.upload_file(file_path, pid=upload_pid)
-                                    if up_result['success']:
-                                        self.logger.success(f"✓ [上传成功] {file_path.name}: 已上传到115")
-                                        stats['non_rapid_moved'] += 1
-                                        delete_after_upload = upload_config.get('delete_after_upload', True)
-                                        if delete_after_upload:
-                                            file_path.unlink(missing_ok=True)
-                                            self._remove_empty_parents(file_path, input_path)
-                                        keys_to_delete.add(file_key)
-                                        if self.telegram.config.get('notify_on_rapid', False):
-                                            self.telegram.notify_rapid_file(f"[上传] {file_path.name}")
-                                    else:
-                                        self.logger.error(f"✗ {file_path.name}: 上传失败 - {up_result.get('error', '')}")
-                                except Exception as e:
-                                    self.logger.error(f"✗ {file_path.name}: 上传异常 - {e}")
-                            else:
-                                # 移动模式：移动到 non_rapid/
-                                try:
-                                    keep_structure = self.config_manager.get('file_processing.move_strategy.create_subdirs', True)
-                                    new_path = self.file_handler.move_or_copy_file(
-                                        file_path, non_rapid_dir,
-                                        keep_structure=keep_structure,
-                                        base_path=input_path,
-                                        use_copy=False
-                                    )
-                                    self.logger.info(f"○ {file_path.name}: 检测 {check_count} 次仍不可秒传，已移动到 {non_rapid_dir.name}/")
-                                    stats['non_rapid_moved'] += 1
-                                    keys_to_rename[file_key] = str(new_path.absolute())
-                                except Exception as e:
-                                    self.logger.error(f"✗ {file_path.name}: 移动失败 - {e}")
-                    else:
-                        # 未达到次数，继续等待
-                        remaining = self.delay_move_times - check_count
-                        self.logger.info(f"⏳ {file_path.name}: 不可秒传（{check_count}/{self.delay_move_times}），还需 {remaining} 次检测")
-                        stats['pending'] += 1
+                    # 不可秒传：立即移动/复制到 待秒传/
+                    try:
+                        keep_structure = self.config_manager.get('file_processing.move_strategy.create_subdirs', True)
+                        new_path = self.file_handler.move_or_copy_file(
+                            file_path, non_rapid_dir,
+                            keep_structure=keep_structure,
+                            base_path=input_path,
+                            use_copy=use_copy
+                        )
+                        action = "已复制" if use_copy else "已移动"
+                        self.logger.info(f"○ {file_path.name}: 不可秒传，{action}到 {non_rapid_dir.name}/")
+                        stats['non_rapid_moved'] += 1
+                        keys_to_rename[file_key] = str(new_path.absolute())
+                    except Exception as e:
+                        self.logger.error(f"✗ {file_path.name}: 移动失败 - {e}")
             
             # 重新从磁盘加载最新数据（check_and_record 在循环中已逐步写入），再应用外层变更
             recheck_data = {}
