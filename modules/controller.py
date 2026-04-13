@@ -87,6 +87,19 @@ class RapidUploadController:
             'moved': 0,
         }
     
+    def _remove_empty_parents(self, path: Path, stop_at: Path):
+        """删除文件删除后留下的空目录，向上清理直到 stop_at 为止"""
+        current = path.parent
+        while current != stop_at and current != current.parent:
+            try:
+                if current.is_dir() and not any(current.iterdir()):
+                    current.rmdir()
+                else:
+                    break
+            except Exception:
+                break
+            current = current.parent
+
     def check_login(self) -> bool:
         """检查115登录状态"""
         self.logger.info("检查115登录状态...")
@@ -226,12 +239,14 @@ class RapidUploadController:
                         suffix_parts = []
                         if delete_after_rapid:
                             new_path.unlink(missing_ok=True)
+                            self._remove_empty_parents(new_path, target_dir)
                             suffix_parts.append("暂存副本已删除")
                         else:
                             action = "已复制" if use_copy else "已移动"
                             suffix_parts.append(f"{action}到 {target_dir.name}/")
                         if delete_source and use_copy:
                             file_path.unlink()
+                            self._remove_empty_parents(file_path, base_path or file_path.parent)
                             suffix_parts.append("原文件已删除")
                         self.logger.success(f"✓ [秒传成功] {file_info['name']}: 115已入库，{'，'.join(suffix_parts)}")
                     except Exception as e:
@@ -512,12 +527,14 @@ class RapidUploadController:
                             suffix_parts = []
                             if delete_after_rapid:
                                 new_path.unlink(missing_ok=True)
+                                self._remove_empty_parents(new_path, rapid_dir)
                                 suffix_parts.append("暂存副本已删除")
                             else:
                                 action = "已复制" if use_copy else "已移动"
                                 suffix_parts.append(f"{action}到 {rapid_dir.name}/")
                             if delete_source and use_copy:
                                 file_path.unlink()
+                                self._remove_empty_parents(file_path, non_rapid_dir)
                                 suffix_parts.append("原文件已删除")
                             self.logger.success(f"✓ [秒传成功] {file_path.name}: 现在可秒传！115已入库，{'，'.join(suffix_parts)}")
                             stats['now_rapid'] += 1
@@ -744,12 +761,14 @@ class RapidUploadController:
                         suffix_parts = []
                         if delete_after_rapid:
                             new_path.unlink(missing_ok=True)
+                            self._remove_empty_parents(new_path, rapid_dir)
                             suffix_parts.append("暂存副本已删除")
                         else:
                             action = "已复制" if use_copy else "已移动"
                             suffix_parts.append(f"{action}到 {rapid_dir.name}/")
                         if delete_source and use_copy:
                             file_path.unlink()
+                            self._remove_empty_parents(file_path, input_path)
                             suffix_parts.append("原文件已删除")
                         self.logger.success(f"✓ [秒传成功] {file_path.name}: 115已入库，{'，'.join(suffix_parts)}")
                         stats['rapid_moved'] += 1
