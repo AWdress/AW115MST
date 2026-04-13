@@ -68,7 +68,7 @@ docker-compose logs -f
 
 ### 本地运行
 
-1. **安装依赖**（需要 Python 3.13+）
+1. **安装依赖**（需要 Python 3.12+）
 ```bash
 pip install -r requirements.txt
 ```
@@ -124,8 +124,8 @@ file_processing:
 
 ```yaml
 recheck:
-  delay_move_times: 3  # 检测 N 次后才移动不可秒传文件
-  max_recheck_times: 10  # 最大重新检测次数
+  delay_move_times: 3   # 检测 N 次后才移动不可秒传文件
+  max_recheck_times: 10  # 最大重新检测次数（0 表示不限次数）
 ```
 
 ### 调度配置
@@ -275,11 +275,11 @@ telegram:
   ↓ 定时任务重检（第2次）
   ↓ 定时任务重检（第3次）
   ├─ ✅ 可秒传 → 复制到 可秒传/movie.mkv
-  │              原文件保留在 待检测/
-  │              标记已处理，不再重复检测
-  └─ ⚠️ 不可秒传 → 保留在 待检测/movie.mkv
-       ↓ 重置计数，继续定时重检
-       └─ ✅ 变为可秒传 → 复制到 可秒传/movie.mkv
+  │              原文件保留在 待检测/，标记已处理
+  └─ ⚠️ 不可秒传 → 复制到 待秒传/movie.mkv
+               原文件保留在 待检测/，标记已分发
+               ↓ 定时重检 待秒传/ 中的副本
+               └─ ✅ 变为可秒传 → 移动到 可秒传/movie.mkv
 ```
 
 ## 🔍 故障排查
@@ -309,8 +309,8 @@ chmod -R 755 待检测 可秒传 待秒传 logs data
 
 ## 📦 依赖项
 
-- Python 3.13+
-- p115client >= 0.0.9
+- Python 3.12+
+- p115client >= 0.0.7
 - PyYAML >= 6.0
 - requests >= 2.31.0
 - tqdm >= 4.66.0
