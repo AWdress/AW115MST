@@ -801,21 +801,52 @@ class RapidUploadController:
                             self.logger.info(f"○ {file_path.name}: 检测 {check_count} 次仍不可秒传（保留在 待检测/，继续重检）")
                             keys_to_reset.add(file_key)
                         else:
-                            # 移动模式：移动到 non_rapid/
-                            try:
-                                keep_structure = self.config_manager.get('file_processing.move_strategy.create_subdirs', True)
-                                new_path = self.file_handler.move_or_copy_file(
-                                    file_path, non_rapid_dir,
-                                    keep_structure=keep_structure,
-                                    base_path=input_path,
-                                    use_copy=False
-                                )
-                                self.logger.info(f"○ {file_path.name}: 检测 {check_count} 次仍不可秒传，已移动到 {non_rapid_dir.name}/")
-                                stats['non_rapid_moved'] += 1
-                                keys_to_rename[file_key] = str(new_path.absolute())
-                                    
-                            except Exception as e:
-                                self.logger.error(f"✗ {file_path.name}: 移动失败 - {e}")
+                            # 检查是否启用真实上传
+                            upload_config = self.config_manager.get('upload', {})
+                            upload_enabled = upload_config.get('enabled', False)
+
+                            if upload_enabled:
+                                try:
+                                    # 计算上传目标 pid（保持子目录结构）
+                                    upload_pid = self.target_pid
+                                    try:
+                                        rel_parts = file_path.parent.relative_to(input_path).parts
+                                        if rel_parts:
+                                            upload_pid = self.p115_client.ensure_remote_path(rel_parts, self.target_pid)
+                                    except Exception:
+                                        pass
+
+                                    self.logger.info(f"⬆ {file_path.name}: 检测 {check_count} 次不可秒传，开始上传...")
+                                    up_result = self.p115_client.upload_file(file_path, pid=upload_pid)
+                                    if up_result['success']:
+                                        self.logger.success(f"✓ [上传成功] {file_path.name}: 已上传到115")
+                                        stats['non_rapid_moved'] += 1
+                                        delete_after_upload = upload_config.get('delete_after_upload', True)
+                                        if delete_after_upload:
+                                            file_path.unlink(missing_ok=True)
+                                            self._remove_empty_parents(file_path, input_path)
+                                        keys_to_delete.add(file_key)
+                                        if self.telegram.config.get('notify_on_rapid', False):
+                                            self.telegram.notify_rapid_file(f"[上传] {file_path.name}")
+                                    else:
+                                        self.logger.error(f"✗ {file_path.name}: 上传失败 - {up_result.get('error', '')}")
+                                except Exception as e:
+                                    self.logger.error(f"✗ {file_path.name}: 上传异常 - {e}")
+                            else:
+                                # 移动模式：移动到 non_rapid/
+                                try:
+                                    keep_structure = self.config_manager.get('file_processing.move_strategy.create_subdirs', True)
+                                    new_path = self.file_handler.move_or_copy_file(
+                                        file_path, non_rapid_dir,
+                                        keep_structure=keep_structure,
+                                        base_path=input_path,
+                                        use_copy=False
+                                    )
+                                    self.logger.info(f"○ {file_path.name}: 检测 {check_count} 次仍不可秒传，已移动到 {non_rapid_dir.name}/")
+                                    stats['non_rapid_moved'] += 1
+                                    keys_to_rename[file_key] = str(new_path.absolute())
+                                except Exception as e:
+                                    self.logger.error(f"✗ {file_path.name}: 移动失败 - {e}")
                     else:
                         # 未达到次数，继续等待
                         remaining = self.delay_move_times - check_count

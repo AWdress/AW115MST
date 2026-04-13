@@ -152,7 +152,37 @@ class P115ClientWrapper:
                 'success': False,
                 'error': str(e),
             }
-    
+
+    def upload_file(self, file_path: Path, pid: int = 0,
+                    progress_callback: Optional[callable] = None) -> Dict[str, Any]:
+        """
+        真实上传文件到 115（分块断点续传）
+
+        :param file_path: 本地文件路径
+        :param pid: 目标目录 ID
+        :param progress_callback: 进度回调 (uploaded_bytes, total_bytes) -> None
+        :return: 上传结果
+        """
+        for attempt in range(self.retry_times):
+            try:
+                resp = self.client.upload_file(
+                    file=file_path,
+                    pid=pid,
+                    partsize=-1,  # 自动选择分块大小
+                )
+                return {
+                    'success': True,
+                    'response': resp,
+                }
+            except Exception as e:
+                if attempt < self.retry_times - 1:
+                    time.sleep(self.retry_delay)
+                    continue
+                return {
+                    'success': False,
+                    'error': str(e),
+                }
+
     def ensure_remote_path(self, parts: tuple, base_pid: int) -> int:
         """
         确保 115 上存在指定多级路径，不存在则逐级创建。返回最终目录的 cid。

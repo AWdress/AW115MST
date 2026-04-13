@@ -39,6 +39,11 @@ file_processing:
     delete_after_rapid: false             # 删除 可秒传/ 里的暂存副本（true=加入文库后删除副本，false=保留）
     delete_source_after_rapid: false      # 删除源文件（true=入库后删除源文件，false=保留用于做种）
 
+# 真实上传配置（不可秒传文件达到 delay_move_times 后直接上传到115）
+upload:
+  enabled: false                     # 启用真实上传（false=移到 待秒传/，true=直接上传到115）
+  delete_after_upload: true           # 上传完成后删除本地文件
+
 # 性能配置
 performance:
   hash_chunk_size: 8192              # 哈希计算块大小（字节）
