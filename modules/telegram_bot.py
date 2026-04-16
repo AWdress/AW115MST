@@ -8,8 +8,12 @@ import json
 from pathlib import Path
 from typing import Dict, Any, Optional
 from datetime import datetime
+import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.error import NetworkError, TimedOut
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
+
+logger = logging.getLogger(__name__)
 
 
 class TelegramBot:
@@ -596,6 +600,16 @@ https://github.com/AWdress/AW115MST
         
         # 注册回调处理器
         self.app.add_handler(CallbackQueryHandler(self.button_callback))
+        
+        # 注册错误处理器，避免网络错误污染日志
+        async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+            err = context.error
+            if isinstance(err, (NetworkError, TimedOut)):
+                logger.warning("Telegram 网络连接失败（可能需要代理）: %s", err)
+            else:
+                logger.error("Telegram Bot 发生未知错误", exc_info=err)
+        
+        self.app.add_error_handler(error_handler)
         
         print("🤖 Telegram Bot 启动成功")
         print(f"📱 Bot Token: {self.bot_token[:10]}...")
