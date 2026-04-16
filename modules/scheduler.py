@@ -167,11 +167,14 @@ class Scheduler:
                 import traceback
                 traceback.print_exc()
         
+        exclude_exts = self.controller.config_manager.get(
+            'file_processing.filters.exclude_extensions', [])
         watcher = FileWatcher(
             watch_path=input_path,
             callback=process_callback,
             debounce_seconds=self.debounce_seconds,
-            recursive=True
+            recursive=True,
+            exclude_extensions=exclude_exts
         )
         
         watcher.start()

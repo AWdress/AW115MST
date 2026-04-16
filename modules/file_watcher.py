@@ -15,8 +15,9 @@ from watchdog.events import FileSystemEventHandler, FileSystemEvent
 class FileWatcher:
     """文件监控器"""
     
-    def __init__(self, watch_path: Path, callback: Callable, 
-                 debounce_seconds: int = 5, recursive: bool = True):
+    def __init__(self, watch_path: Path, callback: Callable,
+                 debounce_seconds: int = 5, recursive: bool = True,
+                 exclude_extensions: list = None):
         """
         初始化文件监控器
         
@@ -24,11 +25,14 @@ class FileWatcher:
         :param callback: 文件稳定后的回调函数
         :param debounce_seconds: 防抖时间（秒），文件稳定后才触发
         :param recursive: 是否递归监控子目录
+        :param exclude_extensions: 忽略的扩展名列表（如 [".part", ".tmp"]）
         """
         self.watch_path = Path(watch_path)
         self.callback = callback
         self.debounce_seconds = debounce_seconds
         self.recursive = recursive
+        # 下载中/临时文件扩展名，匹配到则直接忽略
+        self.exclude_extensions = set(e.lower() for e in (exclude_extensions or []))
         
         # 文件变化追踪
         self.pending_files: Dict[str, float] = {}  # {文件路径: 最后修改时间}
@@ -88,6 +92,10 @@ class FileWatcher:
         # 忽略临时文件和隐藏文件
         file_path = Path(event.src_path)
         if file_path.name.startswith('.') or file_path.name.startswith('~'):
+            return
+        
+        # 忽略下载中的临时扩展名（避免对未完成文件打印误导性日志）
+        if self.exclude_extensions and file_path.suffix.lower() in self.exclude_extensions:
             return
         
         # 忽略正在处理的文件

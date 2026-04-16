@@ -25,6 +25,14 @@ file_processing:
       - .txt
       - .log
       - .tmp
+      # 下载中的临时文件后缀（各下载工具）
+      - .part          # Firefox / wget 临时后缀
+      - .crdownload    # Chrome 下载临时后缀
+      - .!qb           # qBittorrent 临时后缀
+      - .!ut           # µTorrent 临时后缀
+      - .download      # 通用临时后缀
+      - .aria2         # aria2 临时后缀
+      - .mp            # 部分工具的下载中后缀
   
   # 移动策略
   move_strategy:
