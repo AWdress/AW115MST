@@ -86,6 +86,10 @@ class RapidUploadController:
             'failed': 0,
             'moved': 0,
         }
+        
+        # 登录状态缓存（避免每次定时任务都重复校验）
+        self._login_cache_time: Optional[datetime] = None
+        self._login_cache_ttl: int = 3600  # 1小时内不重复校验
     
     def _remove_empty_parents(self, path: Path, stop_at: Path):
         """删除文件删除后留下的空目录，向上清理直到 stop_at 为止"""
@@ -101,15 +105,23 @@ class RapidUploadController:
             current = current.parent
 
     def check_login(self) -> bool:
-        """检查115登录状态"""
+        """检查115登录状态（结果缓存1小时，避免每次定时任务重复校验）"""
+        now = datetime.now()
+        if self._login_cache_time is not None:
+            elapsed = (now - self._login_cache_time).total_seconds()
+            if elapsed < self._login_cache_ttl:
+                return True  # 缓存仍有效，直接跳过
+        
         self.logger.info("检查115登录状态...")
         if self.p115_client.check_login_status():
             user_info = self.p115_client.get_user_info()
             if user_info.get('success'):
                 username = user_info.get('data', {}).get('user_name', '未知')
                 self.logger.success(f"✓ 登录成功，用户: {username}")
+                self._login_cache_time = datetime.now()  # 更新缓存
                 return True
         
+        self._login_cache_time = None  # 清除缓存，下次强制重新检查
         self.logger.error("✗ 115登录失败，请检查cookies配置")
         return False
     
