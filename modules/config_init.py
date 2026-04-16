@@ -176,9 +176,32 @@ def init_config_files():
                 print(f"   ... 还有 {len(added_keys) - 10} 个")
             print()
     
-    # 创建必要的目录
-    required_dirs = ['input', 'rapid', 'non_rapid', 'logs', 'data']
-    for dir_name in required_dirs:
+    # 创建必要的目录（从配置文件中读取实际路径）
+    config_yaml = Path('./config/config.yaml')
+    dirs_to_create = ['logs', 'data']  # 始终需要的固定目录
+
+    try:
+        if config_yaml.exists():
+            if HAS_RUAMEL:
+                _yaml = YAML()
+                with open(config_yaml, 'r', encoding='utf-8') as f:
+                    _cfg = _yaml.load(f)
+            else:
+                import yaml as _pyyaml
+                with open(config_yaml, 'r', encoding='utf-8') as f:
+                    _cfg = _pyyaml.safe_load(f)
+
+            if isinstance(_cfg, dict):
+                fp = _cfg.get('file_processing', {})
+                input_dir = fp.get('input_dir', './待检测').lstrip('.').lstrip('/')
+                ms = fp.get('move_strategy', {})
+                rapid_dir = ms.get('rapid_files_dir', './可秒传').lstrip('.').lstrip('/')
+                non_rapid_dir = ms.get('non_rapid_files_dir', './待秒传').lstrip('.').lstrip('/')
+                dirs_to_create += [input_dir, rapid_dir, non_rapid_dir]
+    except Exception:
+        dirs_to_create += ['待检测', '可秒传', '待秒传']
+
+    for dir_name in dirs_to_create:
         dir_path = Path(dir_name)
         if not dir_path.exists():
             dir_path.mkdir(parents=True, exist_ok=True)
