@@ -471,7 +471,14 @@ class RapidUploadController:
                         record = recheck_data[file_key]
                         last_check_time = record.get('last_check_time', 0)
                         check_count = record.get('check_count', 0)
-                        
+
+                        # 已真实上传过，跳过秒传检测
+                        if record.get('uploaded', False):
+                            self.logger.debug(f"⊛ {file_path.name}: 已真实上传，跳过")
+                            stats['skipped'] += 1
+                            pbar.update(1)
+                            continue
+
                         # 检查是否超过最大检测次数（max_recheck_times 为 0 表示不限次数）
                         if max_recheck_times > 0 and check_count >= max_recheck_times:
                             upload_config = self.config_manager.get('upload', {})
@@ -494,7 +501,10 @@ class RapidUploadController:
                                         if delete_after_upload:
                                             file_path.unlink(missing_ok=True)
                                             self._remove_empty_parents(file_path, non_rapid_dir)
-                                        del recheck_data[file_key]
+                                            del recheck_data[file_key]
+                                        else:
+                                            # 文件保留本地，标记已上传，避免下次重检重复处理
+                                            recheck_data[file_key]['uploaded'] = True
                                         if self.telegram.config.get('notify_on_rapid', False):
                                             self.telegram.notify_rapid_file(file_path.name, action='上传')
                                     else:
