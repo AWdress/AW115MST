@@ -659,12 +659,12 @@ class RapidUploadController:
                 except Exception:
                     pass  # 路径不在 base_path 下，或 115 建目录失败，回退到默认 target_pid
             
-            # 检查秒传状态
+            # 检查秒传状态（始终传入 read_range_bytes，支持任意大小文件的二次验证）
             result = self.p115_client.check_rapid_upload(
                 filename=file_info['name'],
                 filesize=file_info['size'],
                 filesha1=filesha1,
-                read_range_bytes_or_hash=read_range_bytes if file_info['size'] >= 1048576 else None,
+                read_range_bytes_or_hash=read_range_bytes,
                 pid=actual_pid,
             )
             

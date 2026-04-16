@@ -60,12 +60,11 @@ class P115ClientWrapper:
                     "target": target,
                 })
                 
-                # 检查响应
-                check_response(resp)
-                
+                # 先判断 status，避免 check_response 对秒传响应误抛异常
                 status = resp.get("status")
+                state = resp.get("state")
                 
-                # status=2 表示可以秒传
+                # status=2 表示可以秒传（无论 state 值如何）
                 if status == 2:
                     return {
                         'success': True,
@@ -75,22 +74,27 @@ class P115ClientWrapper:
                         'message': '可以秒传',
                     }
                 
-                # status=7 需要二次验证（文件>=1MB）
-                elif status == 7:
+                # 对非秒传响应才检查 API 错误
+                if state == 0 or state is False:
+                    err_msg = resp.get('message', resp.get('msg', f'API返回state={state}'))
+                    raise RuntimeError(f"upload_init API 错误: {err_msg}（完整响应: {resp}）")
+                
+                # status=7 需要二次验证
+                if status == 7:
                     if read_range_bytes_or_hash is None:
-                        raise ValueError("文件大小>=1MB，需要提供read_range_bytes_or_hash参数")
+                        raise ValueError(f"文件需要二次验证但未提供 read_range_bytes_or_hash（filesize={filesize}）")
                     
                     # 获取验证范围
                     sign_check = resp.get("sign_check", "")
                     if not sign_check:
-                        raise ValueError("未获取到sign_check参数")
+                        raise ValueError(f"upload_init 未返回 sign_check，响应: {resp}")
                     
                     # 读取指定范围的数据
                     range_data = read_range_bytes_or_hash(sign_check)
                     
                     # 计算范围数据的SHA-1
-                    from hashlib import sha1
-                    sign_val = sha1(range_data).hexdigest().upper()
+                    from hashlib import sha1 as _sha1
+                    sign_val = _sha1(range_data).hexdigest().upper()
                     
                     # 第二次调用，提交验证
                     resp2 = self.client.upload_init({
@@ -103,26 +107,40 @@ class P115ClientWrapper:
                         "sign_val": sign_val,
                     })
                     
-                    check_response(resp2)
                     status2 = resp2.get("status")
+                    state2 = resp2.get("state")
+                    
+                    # status=2 表示二次验证通过，可秒传
+                    if status2 == 2:
+                        return {
+                            'success': True,
+                            'can_rapid': True,
+                            'status': status2,
+                            'response': resp2,
+                            'message': '可以秒传',
+                        }
+                    
+                    # 二次验证后仍不可秒传
+                    if state2 == 0 or state2 is False:
+                        err_msg = resp2.get('message', resp2.get('msg', f'API返回state={state2}'))
+                        raise RuntimeError(f"upload_init 二次验证 API 错误: {err_msg}（响应: {resp2}）")
                     
                     return {
                         'success': True,
-                        'can_rapid': status2 == 2,
+                        'can_rapid': False,
                         'status': status2,
                         'response': resp2,
-                        'message': '可以秒传' if status2 == 2 else '需要上传',
+                        'message': f'需要上传（二次验证后 status={status2}）',
                     }
                 
                 # status=1 或其他，需要上传
-                else:
-                    return {
-                        'success': True,
-                        'can_rapid': False,
-                        'status': status,
-                        'response': resp,
-                        'message': '需要上传',
-                    }
+                return {
+                    'success': True,
+                    'can_rapid': False,
+                    'status': status,
+                    'response': resp,
+                    'message': f'需要上传（status={status}）',
+                }
                 
             except Exception as e:
                 if attempt < self.retry_times - 1:
