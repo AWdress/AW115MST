@@ -200,7 +200,7 @@ class Scheduler:
                     
                     # 2. 重新检测 non_rapid 目录
                     try:
-                        print("  🔄 重新检测 non_rapid 目录...")
+                        print("  🔄 重新检测 待秒传 目录...")
                         result = self.controller.recheck_non_rapid_files()
                         if result.get('success'):
                             now_rapid = result.get('now_rapid', 0)

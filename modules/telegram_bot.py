@@ -57,7 +57,7 @@ class TelegramBot:
 欢迎使用 115 网盘秒传检测工具！
 
 📌 <b>功能说明：</b>
-• 自动监控 input 目录
+• 自动监控 待检测 目录
 • 智能延迟移动策略
 • 定时重新检测
 • 实时状态查询
@@ -157,7 +157,7 @@ class TelegramBot:
     
     async def scan_now(self, query):
         """立即执行扫描"""
-        await query.edit_message_text("🔍 开始扫描 input 目录...\n请稍候...")
+        await query.edit_message_text("🔍 开始扫描 待检测 目录...\n请稍候...")
         
         try:
             result = self.controller.process_input_with_delay()
@@ -193,7 +193,7 @@ class TelegramBot:
     
     async def recheck_now(self, query):
         """立即执行重新检测"""
-        await query.edit_message_text("🔄 开始重新检测 non_rapid 目录...\n请稍候...")
+        await query.edit_message_text("🔄 开始重新检测 待秒传 目录...\n请稍候...")
         
         try:
             result = self.controller.recheck_non_rapid_files()
@@ -486,10 +486,10 @@ class TelegramBot:
 查看当前文件分布和系统运行状态
 
 🔍 <b>立即检测</b>
-手动触发 input 目录扫描
+手动触发 待检测 目录扫描
 
 🔄 <b>重新检测</b>
-手动触发 non_rapid 目录重检
+手动触发 待秒传 目录重检
 
 🧹 <b>清理记录</b>
 清理已处理文件的标记（复制模式）

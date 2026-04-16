@@ -277,9 +277,28 @@ def validate_config():
         errors.append("115 Cookies 未配置或配置错误")
         warnings.append("请编辑 config/115-cookies.txt 并填入真实的 Cookie 值")
     
-    # 检查必要目录
-    required_dirs = ['input', 'rapid', 'non_rapid', 'logs', 'data']
-    for dir_name in required_dirs:
+    # 检查必要目录（从 config.yaml 读取实际路径）
+    dirs_to_check = ['logs', 'data']
+    try:
+        if config_file.exists():
+            if HAS_RUAMEL:
+                _yaml = YAML()
+                with open(config_file, 'r', encoding='utf-8') as f:
+                    _cfg = _yaml.load(f)
+            else:
+                import yaml as _pyyaml
+                with open(config_file, 'r', encoding='utf-8') as f:
+                    _cfg = _pyyaml.safe_load(f)
+            if isinstance(_cfg, dict):
+                fp = _cfg.get('file_processing', {})
+                dirs_to_check.append(fp.get('input_dir', './待检测').lstrip('./'))
+                ms = fp.get('move_strategy', {})
+                dirs_to_check.append(ms.get('rapid_files_dir', './可秒传').lstrip('./'))
+                dirs_to_check.append(ms.get('non_rapid_files_dir', './待秒传').lstrip('./'))
+    except Exception:
+        dirs_to_check += ['待检测', '可秒传', '待秒传']
+
+    for dir_name in dirs_to_check:
         if not Path(dir_name).exists():
             warnings.append(f"目录不存在: {dir_name}/ (将自动创建)")
     
