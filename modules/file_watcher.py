@@ -89,8 +89,13 @@ class FileWatcher:
         if event.is_directory:
             return
         
+        # 对于移动/重命名事件，使用目标路径（src_path 是临时文件名，dest_path 才是真实文件名）
+        if hasattr(event, 'dest_path') and event.dest_path:
+            file_path = Path(event.dest_path)
+        else:
+            file_path = Path(event.src_path)
+
         # 忽略临时文件和隐藏文件
-        file_path = Path(event.src_path)
         if file_path.name.startswith('.') or file_path.name.startswith('~'):
             return
         
