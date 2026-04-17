@@ -510,6 +510,8 @@ class RapidUploadController:
                                         self.logger.success(f"✓ [上传成功] {file_path.name}: 已上传到115")
                                         stats['now_rapid'] += 1
                                         delete_after_upload = upload_config.get('delete_after_upload', True)
+                                        # 取 source_input_key（use_copy 模式下指向待检测原件）
+                                        source_input_key = record.get('source_input_key')
                                         if delete_after_upload:
                                             file_path.unlink(missing_ok=True)
                                             self._remove_empty_parents(file_path, non_rapid_dir)
@@ -517,6 +519,11 @@ class RapidUploadController:
                                         else:
                                             # 文件保留本地，标记已上传，避免下次重检重复处理
                                             recheck_data[file_key]['uploaded'] = True
+                                        # 同步更新待检测原件记录，避免下次定时任务重新处理
+                                        if source_input_key and source_input_key in recheck_data:
+                                            recheck_data[source_input_key]['uploaded'] = True
+                                            recheck_data[source_input_key].pop('non_rapid_dispatched', None)
+                                            recheck_data[source_input_key].pop('non_rapid_path', None)
                                         if self.telegram.config.get('notify_on_rapid', False):
                                             self.telegram.notify_rapid_file(file_path.name, action='上传')
                                     else:
@@ -787,12 +794,18 @@ class RapidUploadController:
                     if record.get('processed') and record.get('last_status') == 'rapid':
                         # 已处理的可秒传文件，跳过
                         continue
+                    if record.get('uploaded'):
+                        # 已真实上传过，跳过（避免 use_copy 模式下待检测原件被反复重检）
+                        continue
                     if record.get('non_rapid_dispatched'):
                         # use_copy 模式下已将副本分发到 待秒传/，验证副本是否仍存在
                         non_rapid_path = record.get('non_rapid_path', '')
                         if non_rapid_path and Path(non_rapid_path).exists():
                             continue  # 副本存在，由 recheck_non_rapid_files 处理
-                        # 副本不存在（可能已秒传移走），重新处理
+                        # 副本不存在，但可能是上传后删除了，再检查一次 uploaded 标志
+                        # （recheck_non_rapid_files 上传成功后会同步更新此记录）
+                        if record.get('uploaded'):
+                            continue
                 
                 # 检查文件状态（check_and_record 内部会更新并写入磁盘）
                 result = self.check_and_record(file_path, base_path=input_path)
@@ -893,7 +906,8 @@ class RapidUploadController:
             for input_key, non_rapid_key in keys_dispatched.items():
                 # use_copy 模式：待检测/ key 保留并标记已分发；待秒传/ key 单独建立
                 recheck_data[non_rapid_key] = {**recheck_data.get(input_key, {}),
-                                               'location': 'non_rapid', 'check_count': 0}
+                                               'location': 'non_rapid', 'check_count': 0,
+                                               'source_input_key': input_key}  # 反向引用，用于上传后同步标记
                 recheck_data[non_rapid_key].pop('non_rapid_dispatched', None)
                 recheck_data[non_rapid_key].pop('non_rapid_path', None)
                 recheck_data.setdefault(input_key, {}).update({
