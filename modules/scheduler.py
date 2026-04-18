@@ -152,16 +152,16 @@ class Scheduler:
             try:
                 print(f"🔍 正在检测: {file_path.name} ...")
                 
-                # 实时监控到的新文件，先检测但不移动
-                result = self.controller.check_and_record(file_path)
+                # 实时监控到新文件，立即执行完整检测 + 移动流程（定时任务仅作补全）
+                result = self.controller.process_input_with_delay()
                 
                 if result.get('success'):
-                    if result.get('can_rapid'):
-                        print(f"✅ {file_path.name}: 可秒传（将在定时任务中移动）")
-                    else:
-                        print(f"📝 {file_path.name}: 不可秒传（已记录，将定时重检）")
+                    rapid = result.get('rapid_moved', 0)
+                    non_rapid = result.get('non_rapid_moved', 0)
+                    if rapid or non_rapid:
+                        print(f"✅ 实时处理完成: {rapid} 个可秒传已移动, {non_rapid} 个不可秒传已移动")
                 else:
-                    print(f"⚠️  {file_path.name}: 检测失败 - {result.get('error', '未知错误')}")
+                    print(f"⚠️  实时处理失败 - {result.get('error', '未知错误')}")
             except Exception as e:
                 print(f"❌ {file_path.name}: 处理失败 - {e}")
                 import traceback

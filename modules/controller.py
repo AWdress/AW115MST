@@ -807,8 +807,22 @@ class RapidUploadController:
                         if record.get('uploaded'):
                             continue
                 
-                # 检查文件状态（check_and_record 内部会更新并写入磁盘）
-                result = self.check_and_record(file_path, base_path=input_path)
+                # 若实时监控已算好 SHA1 且文件大小未变，直接使用缓存结果，避免重复计算哈希和重复调用 115 API
+                cached_record = initial_recheck_data.get(file_key, {})
+                cached_status = cached_record.get('last_status')
+                cached_size = cached_record.get('size')
+                if (cached_status in ('rapid', 'non_rapid')
+                        and cached_size is not None
+                        and file_path.exists()
+                        and cached_size == file_path.stat().st_size):
+                    result = {
+                        'success': True,
+                        'can_rapid': cached_status == 'rapid',
+                        'check_count': cached_record.get('check_count', 0),
+                    }
+                else:
+                    # 无缓存或文件已变化，重新检查（check_and_record 内部会更新并写入磁盘）
+                    result = self.check_and_record(file_path, base_path=input_path)
                 
                 if not result.get('success'):
                     continue
