@@ -12,5 +12,6 @@ __all__ = [
     "Logger",
     "ConfigManager",
     "RapidUploadController",
+    "DBManager",
 ]
 

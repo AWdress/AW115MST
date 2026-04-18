@@ -77,6 +77,12 @@ class RapidUploadController:
         self.recheck_config = self.config_manager.get('recheck', {})
         self.recheck_file = Path(self.recheck_config.get('recheck_file', './data/recheck.json'))
         self.delay_move_times = self.recheck_config.get('delay_move_times', 3)
+
+        # SQLite 数据库（替代 recheck.json / checkpoint.json）
+        from .db_manager import DBManager
+        db_path = self.recheck_file.parent / 'aw115mst.db'
+        self.db = DBManager(str(db_path))
+        self.db.migrate_from_json(self.recheck_file, self.checkpoint_file)
         
         # 统计信息
         self.stats = {
@@ -126,35 +132,16 @@ class RapidUploadController:
         return False
     
     def load_checkpoint(self) -> set:
-        """加载断点信息"""
+        """加载断点信息（从 SQLite 数据库）"""
         if not self.checkpoint_config.get('enabled', True):
             return set()
-        
-        if self.checkpoint_file.exists():
-            try:
-                with open(self.checkpoint_file, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                    self.processed_files = set(data.get('processed_files', []))
-                    self.logger.info(f"加载断点信息: 已处理 {len(self.processed_files)} 个文件")
-                    return self.processed_files
-            except Exception as e:
-                self.logger.warning(f"加载断点信息失败: {e}")
-        
-        return set()
+        self.processed_files = self.db.get_all_processed()
+        self.logger.info(f"加载断点信息: 已处理 {len(self.processed_files)} 个文件")
+        return self.processed_files
     
     def save_checkpoint(self):
-        """保存断点信息"""
-        if not self.checkpoint_config.get('enabled', True):
-            return
-        
-        try:
-            with open(self.checkpoint_file, 'w', encoding='utf-8') as f:
-                json.dump({
-                    'processed_files': list(self.processed_files),
-                    'timestamp': datetime.now().isoformat(),
-                }, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            self.logger.warning(f"保存断点信息失败: {e}")
+        """保存断点信息（SQLite 实时写入，此方法保留向后兼容）"""
+        pass
     
     def process_file(self, file_path: Path, target_dir: Optional[Path] = None,
                     base_path: Optional[Path] = None, move_files: bool = True) -> Dict[str, Any]:
@@ -308,6 +295,7 @@ class RapidUploadController:
             
             # 标记为已处理
             self.processed_files.add(file_path_str)
+            self.db.mark_processed(file_path_str)
             
             return {'success': True, 'can_rapid': result['can_rapid']}
             
@@ -425,14 +413,7 @@ class RapidUploadController:
                     'error': '重新检测功能未启用，请在 config.yaml 中启用'
                 }
             
-            recheck_file = self.recheck_file  # 与 check_and_record / process_input_with_delay 保持同一路径
             max_recheck_times = recheck_config.get('max_recheck_times', 10)
-            
-            # 加载重新检测记录
-            recheck_data = {}
-            if recheck_file.exists():
-                with open(recheck_file, 'r', encoding='utf-8') as f:
-                    recheck_data = json.load(f)
             
             # 获取 待秒传 目录
             move_strategy = self.config_manager.get('file_processing.move_strategy', {})
@@ -477,96 +458,80 @@ class RapidUploadController:
             with tqdm(total=len(files), desc="重新检测进度", unit="文件") as pbar:
                 for file_path in files:
                     file_key = str(file_path.absolute())
-                    
-                    # 检查重新检测记录
-                    if file_key in recheck_data:
-                        record = recheck_data[file_key]
-                        last_check_time = record.get('last_check_time', 0)
-                        check_count = record.get('check_count', 0)
+                    record = self.db.get_record(file_key) or {}
+                    check_count = record.get('check_count', 0)
 
-                        # 已真实上传过，跳过秒传检测
-                        if record.get('uploaded', False):
-                            self.logger.debug(f"⊛ {file_path.name}: 已真实上传，跳过")
-                            stats['skipped'] += 1
-                            pbar.update(1)
-                            continue
+                    # 已真实上传过，跳过秒传检测
+                    if record.get('uploaded'):
+                        self.logger.debug(f"⊛ {file_path.name}: 已真实上传，跳过")
+                        stats['skipped'] += 1
+                        pbar.update(1)
+                        continue
 
-                        # 检查是否超过最大检测次数（max_recheck_times 为 0 表示不限次数）
-                        if max_recheck_times > 0 and check_count >= max_recheck_times:
-                            upload_config = self.config_manager.get('upload', {})
-                            if upload_config.get('enabled', False):
-                                # 达到最大次数且开启了上传：直接上传
+                    # 检查是否超过最大检测次数（max_recheck_times 为 0 表示不限次数）
+                    if max_recheck_times > 0 and check_count >= max_recheck_times:
+                        upload_config = self.config_manager.get('upload', {})
+                        if upload_config.get('enabled', False):
+                            try:
+                                upload_pid = self.target_pid
                                 try:
-                                    upload_pid = self.target_pid
-                                    try:
-                                        rel_parts = file_path.parent.relative_to(non_rapid_dir).parts
-                                        if rel_parts:
-                                            upload_pid = self.p115_client.ensure_remote_path(rel_parts, self.target_pid)
-                                    except Exception:
-                                        pass
-                                    self.logger.info(f"⬆ {file_path.name}: 重检达到上限({max_recheck_times}次)，开始上传...")
-                                    up_result = self.p115_client.upload_file(file_path, pid=upload_pid)
-                                    if up_result['success']:
-                                        self.logger.success(f"✓ [上传成功] {file_path.name}: 已上传到115")
-                                        stats['now_rapid'] += 1
-                                        delete_after_upload = upload_config.get('delete_after_upload', True)
-                                        # 取 source_input_key（use_copy 模式下指向待检测原件）
-                                        source_input_key = record.get('source_input_key')
-                                        if delete_after_upload:
-                                            file_path.unlink(missing_ok=True)
-                                            self._remove_empty_parents(file_path, non_rapid_dir)
-                                            del recheck_data[file_key]
-                                        else:
-                                            # 文件保留本地，标记已上传，避免下次重检重复处理
-                                            recheck_data[file_key]['uploaded'] = True
-                                        # 同步更新待检测原件记录，避免下次定时任务重新处理
-                                        if source_input_key and source_input_key in recheck_data:
-                                            recheck_data[source_input_key]['uploaded'] = True
-                                            recheck_data[source_input_key].pop('non_rapid_dispatched', None)
-                                            recheck_data[source_input_key].pop('non_rapid_path', None)
-                                        if self.telegram.config.get('notify_on_rapid', False):
-                                            self.telegram.notify_rapid_file(file_path.name, action='上传')
+                                    rel_parts = file_path.parent.relative_to(non_rapid_dir).parts
+                                    if rel_parts:
+                                        upload_pid = self.p115_client.ensure_remote_path(rel_parts, self.target_pid)
+                                except Exception:
+                                    pass
+                                self.logger.info(f"⬆ {file_path.name}: 重检达到上限({max_recheck_times}次)，开始上传...")
+                                up_result = self.p115_client.upload_file(file_path, pid=upload_pid)
+                                if up_result['success']:
+                                    self.logger.success(f"✓ [上传成功] {file_path.name}: 已上传到115")
+                                    stats['now_rapid'] += 1
+                                    delete_after_upload = upload_config.get('delete_after_upload', True)
+                                    source_input_key = record.get('source_input_key')
+                                    if delete_after_upload:
+                                        file_path.unlink(missing_ok=True)
+                                        self._remove_empty_parents(file_path, non_rapid_dir)
+                                        self.db.delete_record(file_key)
                                     else:
-                                        self.logger.error(f"✗ {file_path.name}: 上传失败 - {up_result.get('error', '')}")
-                                        stats['skipped'] += 1
-                                except Exception as e:
-                                    self.logger.error(f"✗ {file_path.name}: 上传异常 - {e}")
+                                        self.db.upsert_record(file_key, uploaded=True)
+                                    if source_input_key:
+                                        src_rec = self.db.get_record(source_input_key)
+                                        if src_rec:
+                                            self.db.upsert_record(source_input_key,
+                                                uploaded=True,
+                                                non_rapid_dispatched=False,
+                                                non_rapid_path=None,
+                                            )
+                                    if self.telegram.config.get('notify_on_rapid', False):
+                                        self.telegram.notify_rapid_file(file_path.name, action='上传')
+                                else:
+                                    self.logger.error(f"✗ {file_path.name}: 上传失败 - {up_result.get('error', '')}")
                                     stats['skipped'] += 1
-                            else:
-                                self.logger.info(f"⊛ {file_path.name}: 已达到最大检测次数({max_recheck_times})，跳过")
+                            except Exception as e:
+                                self.logger.error(f"✗ {file_path.name}: 上传异常 - {e}")
                                 stats['skipped'] += 1
-                            pbar.update(1)
-                            continue
-                        
+                        else:
+                            self.logger.info(f"⊛ {file_path.name}: 已达到最大检测次数({max_recheck_times})，跳过")
+                            stats['skipped'] += 1
+                        pbar.update(1)
+                        continue
 
                     # 重新检测
                     result = self.check_and_record(file_path, base_path=non_rapid_dir)
-                    
+
                     if not result.get('success'):
                         stats['skipped'] += 1
                         pbar.update(1)
                         continue
-                    
-                    # 更新记录
-                    if file_key not in recheck_data:
-                        recheck_data[file_key] = {
-                            'first_check_time': current_time,
-                            'check_count': 0,
-                            'location': 'non_rapid'
-                        }
-                    
-                    recheck_data[file_key]['last_check_time'] = current_time
-                    recheck_data[file_key]['check_count'] = recheck_data[file_key].get('check_count', 0) + 1
-                    recheck_data[file_key]['last_status'] = 'rapid' if result['can_rapid'] else 'non_rapid'
-                    
+
+                    # 确保 location 标记为 non_rapid
+                    self.db.upsert_record(file_key, location='non_rapid')
+
                     if result['can_rapid']:
                         # 变成可秒传，移动到 rapid 目录
                         try:
                             delete_after_rapid = self.config_manager.get('file_processing.move_strategy.delete_after_rapid', False)
                             use_copy = self.config_manager.get('file_processing.move_strategy.use_copy', False)
                             keep_structure = self.config_manager.get('file_processing.move_strategy.create_subdirs', True)
-
-                            # 使用统一的移动/复制方法
                             new_path = self.file_handler.move_or_copy_file(
                                 file_path, rapid_dir,
                                 keep_structure=keep_structure,
@@ -581,32 +546,22 @@ class RapidUploadController:
                             else:
                                 action = "已复制" if use_copy else "已移动"
                                 suffix_parts.append(f"{action}到 {rapid_dir.name}/")
-                            # use_copy 时原件留在 待秒传，成功后必须清理（待秒传只是暂存区）
                             if use_copy and file_path.exists():
                                 file_path.unlink()
                                 self._remove_empty_parents(file_path, non_rapid_dir)
                                 suffix_parts.append("待秒传原件已清理")
                             self.logger.success(f"✓ [秒传成功] {file_path.name}: 现在可秒传！115已入库，{'，'.join(suffix_parts)}")
                             stats['now_rapid'] += 1
-                            
-                            # 从记录中删除（已经可秒传了）
-                            del recheck_data[file_key]
-                            
-                            # 发送 Telegram 通知
+                            self.db.delete_record(file_key)
                             if self.telegram.config.get('notify_on_rapid', False):
                                 self.telegram.notify_rapid_file(file_path.name)
-                                
                         except Exception as e:
                             self.logger.error(f"✗ {file_path.name}: 操作失败: {e}")
                     else:
                         self.logger.info(f"○ {file_path.name}: 仍不可秒传")
                         stats['still_non_rapid'] += 1
-                    
+
                     pbar.update(1)
-            
-            # 保存重新检测记录
-            with open(recheck_file, 'w', encoding='utf-8') as f:
-                json.dump(recheck_data, f, ensure_ascii=False, indent=2)
             
             # 输出统计
             print("\n" + "=" * 60)
@@ -690,38 +645,26 @@ class RapidUploadController:
             if not result['success']:
                 return {'success': False, 'error': result.get('message', '')}
             
-            # 加载重新检测记录
-            recheck_data = {}
-            if self.recheck_file.exists():
-                with open(self.recheck_file, 'r', encoding='utf-8') as f:
-                    recheck_data = json.load(f)
-            
-            # 记录检测结果
+            # 记录检测结果（使用 SQLite 替代 JSON 文件）
             file_key = str(file_path.absolute())
             current_time = datetime.now().timestamp()
-            
-            if file_key not in recheck_data:
-                recheck_data[file_key] = {
-                    'first_check_time': current_time,
-                    'check_count': 0,
-                    'location': 'input'  # 文件位置：input 或 non_rapid
-                }
-            
-            recheck_data[file_key]['last_check_time'] = current_time
-            recheck_data[file_key]['check_count'] = recheck_data[file_key].get('check_count', 0) + 1
-            recheck_data[file_key]['last_status'] = 'rapid' if result['can_rapid'] else 'non_rapid'
-            recheck_data[file_key]['sha1'] = filesha1
-            recheck_data[file_key]['size'] = file_info['size']
-            
-            # 保存记录
-            self.recheck_file.parent.mkdir(parents=True, exist_ok=True)
-            with open(self.recheck_file, 'w', encoding='utf-8') as f:
-                json.dump(recheck_data, f, ensure_ascii=False, indent=2)
-            
+
+            existing = self.db.get_record(file_key) or {}
+            self.db.upsert_record(
+                file_key,
+                sha1=filesha1,
+                size=file_info['size'],
+                last_status='rapid' if result['can_rapid'] else 'non_rapid',
+                check_count=existing.get('check_count', 0) + 1,
+                first_check_time=existing.get('first_check_time', current_time),
+                last_check_time=current_time,
+                location=existing.get('location', 'input'),
+            )
+
             return {
                 'success': True,
                 'can_rapid': result['can_rapid'],
-                'check_count': recheck_data[file_key]['check_count']
+                'check_count': existing.get('check_count', 0) + 1,
             }
             
         except Exception as e:
@@ -744,12 +687,6 @@ class RapidUploadController:
             # 检查登录状态
             if not self.check_login():
                 return {'success': False, 'error': '115登录失败'}
-            
-            # 加载重新检测记录（仅用于"已处理"判断，不用于最终保存）
-            initial_recheck_data = {}
-            if self.recheck_file.exists():
-                with open(self.recheck_file, 'r', encoding='utf-8') as f:
-                    initial_recheck_data = json.load(f)
             
             # 扫描 input 目录中的所有文件
             files = self.file_handler.scan_files(input_path, recursive=True)
@@ -777,40 +714,25 @@ class RapidUploadController:
             non_rapid_dir.mkdir(parents=True, exist_ok=True)
             use_copy = self.config_manager.get('file_processing.move_strategy.use_copy', False)
             
-            # 跟踪循环中需要在最终保存时应用的额外变更
-            # check_and_record 在每次调用后都会写磁盘，循环结束后需要 reload 再应用这些变更
-            rapid_copy_updates: Dict[str, Dict] = {}  # file_key -> 需要 merge 的字段
-            keys_to_delete: set = set()               # 需要删除的 file_key（move 模式可秒传）
-            keys_to_reset: set = set()                # 需要重置 check_count 的 file_key
-            keys_to_rename: Dict[str, str] = {}       # old_file_key -> new_file_key（move 模式不可秒传，移到 non_rapid）
-            keys_dispatched: Dict[str, str] = {}      # 待检测/ key -> 待秒传/ key（use_copy 不可秒传，标记已分发）
-            
             for file_path in files:
                 file_key = str(file_path.absolute())
+                record = self.db.get_record(file_key) or {}
                 
-                # 检查是否已处理（复制模式下的可秒传文件）
-                if file_key in initial_recheck_data:
-                    record = initial_recheck_data[file_key]
-                    if record.get('processed') and record.get('last_status') == 'rapid':
-                        # 已处理的可秒传文件，跳过
-                        continue
+                # 跳过已处理文件（复制模式可秒传/已上传/副本存在）
+                if record.get('processed') and record.get('last_status') == 'rapid':
+                    continue
+                if record.get('uploaded'):
+                    continue
+                if record.get('non_rapid_dispatched'):
+                    non_rapid_path = record.get('non_rapid_path', '')
+                    if non_rapid_path and Path(non_rapid_path).exists():
+                        continue  # 副本存在，由 recheck_non_rapid_files 处理
                     if record.get('uploaded'):
-                        # 已真实上传过，跳过（避免 use_copy 模式下待检测原件被反复重检）
                         continue
-                    if record.get('non_rapid_dispatched'):
-                        # use_copy 模式下已将副本分发到 待秒传/，验证副本是否仍存在
-                        non_rapid_path = record.get('non_rapid_path', '')
-                        if non_rapid_path and Path(non_rapid_path).exists():
-                            continue  # 副本存在，由 recheck_non_rapid_files 处理
-                        # 副本不存在，但可能是上传后删除了，再检查一次 uploaded 标志
-                        # （recheck_non_rapid_files 上传成功后会同步更新此记录）
-                        if record.get('uploaded'):
-                            continue
                 
-                # 若实时监控已算好 SHA1 且文件大小未变，直接使用缓存结果，避免重复计算哈希和重复调用 115 API
-                cached_record = initial_recheck_data.get(file_key, {})
-                cached_status = cached_record.get('last_status')
-                cached_size = cached_record.get('size')
+                # 若 DB 中已有缓存结果且文件大小未变，直接使用，避免重复计算哈希和调用 115 API
+                cached_status = record.get('last_status')
+                cached_size = record.get('size')
                 if (cached_status in ('rapid', 'non_rapid')
                         and cached_size is not None
                         and file_path.exists()
@@ -818,7 +740,7 @@ class RapidUploadController:
                     result = {
                         'success': True,
                         'can_rapid': cached_status == 'rapid',
-                        'check_count': cached_record.get('check_count', 0),
+                        'check_count': record.get('check_count', 0),
                     }
                 else:
                     # 无缓存或文件已变化，重新检查（check_and_record 内部会更新并写入磁盘）
@@ -857,18 +779,16 @@ class RapidUploadController:
                         self.logger.success(f"✓ [秒传成功] {file_path.name}: 115已入库，{'，'.join(suffix_parts)}")
                         stats['rapid_moved'] += 1
 
-                        # 记录需要在最终保存时应用的变更
+                        # 直接写 DB（无需批量保存）
                         if use_copy and not delete_source:
-                            # 复制模式且不删源：标记为已处理，保留记录避免重复检测
-                            rapid_copy_updates[file_key] = {
-                                'processed': True,
-                                'last_status': 'rapid',
-                                'processed_time': datetime.now().timestamp(),
-                                'target_path': str(new_path),
-                            }
+                            self.db.upsert_record(file_key,
+                                processed=True,
+                                last_status='rapid',
+                                processed_time=datetime.now().timestamp(),
+                                target_path=str(new_path),
+                            )
                         else:
-                            # 移动模式或已删源：文件已不在 input，删除记录
-                            keys_to_delete.add(file_key)
+                            self.db.delete_record(file_key)
                         
                         # 发送 Telegram 通知
                         if self.telegram.config.get('notify_on_rapid', False):
@@ -890,48 +810,30 @@ class RapidUploadController:
                         action = "已复制" if use_copy else "已移动"
                         self.logger.info(f"○ {file_path.name}: 不可秒传，{action}到 {non_rapid_dir.name}/")
                         stats['non_rapid_moved'] += 1
+                        non_rapid_key = str(new_path.absolute())
                         if use_copy:
-                            # use_copy 模式：源文件留在 待检测/，标记已分发避免重复划
-                            keys_dispatched[file_key] = str(new_path.absolute())
+                            # 为 待秒传/ 副本建立独立记录，源文件标记已分发
+                            src = self.db.get_record(file_key) or {}
+                            new_fields = {k: v for k, v in src.items() if k != 'file_key'}
+                            new_fields.update({
+                                'location': 'non_rapid',
+                                'check_count': 0,
+                                'source_input_key': file_key,
+                                'non_rapid_dispatched': False,
+                                'non_rapid_path': None,
+                            })
+                            self.db.upsert_record(non_rapid_key, **new_fields)
+                            self.db.upsert_record(file_key,
+                                non_rapid_dispatched=True,
+                                non_rapid_path=non_rapid_key,
+                            )
                         else:
-                            keys_to_rename[file_key] = str(new_path.absolute())
+                            self.db.rename_record(file_key, non_rapid_key,
+                                location='non_rapid',
+                                check_count=0,
+                            )
                     except Exception as e:
                         self.logger.error(f"✗ {file_path.name}: 移动失败 - {e}")
-            
-            # 重新从磁盘加载最新数据（check_and_record 在循环中已逐步写入），再应用外层变更
-            recheck_data = {}
-            if self.recheck_file.exists():
-                with open(self.recheck_file, 'r', encoding='utf-8') as f:
-                    recheck_data = json.load(f)
-            
-            for key, updates in rapid_copy_updates.items():
-                recheck_data.setdefault(key, {}).update(updates)
-            for key in keys_to_delete:
-                recheck_data.pop(key, None)
-            for key in keys_to_reset:
-                if key in recheck_data:
-                    recheck_data[key]['check_count'] = 0
-                    recheck_data[key]['last_recheck_time'] = datetime.now().timestamp()
-            for old_key, new_key in keys_to_rename.items():
-                if old_key in recheck_data:
-                    recheck_data[new_key] = recheck_data.pop(old_key)
-                    recheck_data[new_key]['location'] = 'non_rapid'
-                    recheck_data[new_key]['check_count'] = 0
-            for input_key, non_rapid_key in keys_dispatched.items():
-                # use_copy 模式：待检测/ key 保留并标记已分发；待秒传/ key 单独建立
-                recheck_data[non_rapid_key] = {**recheck_data.get(input_key, {}),
-                                               'location': 'non_rapid', 'check_count': 0,
-                                               'source_input_key': input_key}  # 反向引用，用于上传后同步标记
-                recheck_data[non_rapid_key].pop('non_rapid_dispatched', None)
-                recheck_data[non_rapid_key].pop('non_rapid_path', None)
-                recheck_data.setdefault(input_key, {}).update({
-                    'non_rapid_dispatched': True,
-                    'non_rapid_path': non_rapid_key,
-                })
-            
-            # 保存更新后的记录
-            with open(self.recheck_file, 'w', encoding='utf-8') as f:
-                json.dump(recheck_data, f, ensure_ascii=False, indent=2)
             
             return {
                 'success': True,
@@ -950,46 +852,26 @@ class RapidUploadController:
         :return: 清理结果
         """
         try:
-            recheck_file = Path(self.recheck_file)
-            
-            if not recheck_file.exists():
-                return {
-                    'success': True,
-                    'cleaned': 0,
-                    'message': '记录文件不存在'
-                }
-            
-            # 读取记录
-            with open(recheck_file, 'r', encoding='utf-8') as f:
-                recheck_data = json.load(f)
-            
-            # 统计
-            total_before = len(recheck_data)
+            all_records = self.db.get_all_records()
+            total_before = len(all_records)
             cleaned_count = 0
             
             # 清理已处理的记录
-            keys_to_remove = []
-            for file_key, record in recheck_data.items():
+            for file_key, record in all_records.items():
                 if record.get('processed'):
-                    keys_to_remove.append(file_key)
+                    self.db.delete_record(file_key)
                     cleaned_count += 1
             
-            for key in keys_to_remove:
-                del recheck_data[key]
-            
-            # 保存更新后的记录
-            with open(recheck_file, 'w', encoding='utf-8') as f:
-                json.dump(recheck_data, f, ensure_ascii=False, indent=2)
-            
+            total_after = total_before - cleaned_count
             print(f"清理前记录数: {total_before}")
-            print(f"清理后记录数: {len(recheck_data)}")
+            print(f"清理后记录数: {total_after}")
             print(f"已清理: {cleaned_count} 条")
             
             return {
                 'success': True,
                 'cleaned': cleaned_count,
                 'total_before': total_before,
-                'total_after': len(recheck_data)
+                'total_after': total_after
             }
             
         except Exception as e:
