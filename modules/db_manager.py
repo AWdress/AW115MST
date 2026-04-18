@@ -80,22 +80,15 @@ class DBManager:
             return {row['file_key']: self._row_to_dict(row) for row in rows}
 
     def upsert_record(self, file_key: str, **fields) -> None:
-        """INSERT 或 UPDATE 一条记录"""
-        existing = self.get_record(file_key)
-        if existing is None:
-            fields['file_key'] = file_key
-            cols = ', '.join(fields.keys())
-            placeholders = ', '.join(['?'] * len(fields))
-            with self._get_conn() as conn:
-                conn.execute(
-                    f"INSERT INTO file_records ({cols}) VALUES ({placeholders})",
-                    list(fields.values())
-                )
-        else:
-            if not fields:
-                return
-            set_clause = ', '.join([f"{k} = ?" for k in fields])
-            with self._get_conn() as conn:
+        """INSERT 或 UPDATE 一条记录（并发安全）"""
+        with self._get_conn() as conn:
+            # 保证行存在（区别于 INSERT OR REPLACE ，后者会删除再重建丢失未传入字段）
+            conn.execute(
+                "INSERT OR IGNORE INTO file_records (file_key) VALUES (?)",
+                (file_key,)
+            )
+            if fields:
+                set_clause = ', '.join([f"{k} = ?" for k in fields])
                 conn.execute(
                     f"UPDATE file_records SET {set_clause} WHERE file_key = ?",
                     list(fields.values()) + [file_key]

@@ -453,8 +453,6 @@ class RapidUploadController:
             rapid_dir = Path(move_strategy.get('rapid_files_dir', './可秒传'))
             rapid_dir.mkdir(parents=True, exist_ok=True)
             
-            current_time = datetime.now().timestamp()
-            
             with tqdm(total=len(files), desc="重新检测进度", unit="文件") as pbar:
                 for file_path in files:
                     file_key = str(file_path.absolute())
