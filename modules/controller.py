@@ -195,8 +195,8 @@ class RapidUploadController:
                     rel_parts = file_path.parent.relative_to(base_path).parts
                     if rel_parts:
                         actual_pid = self.p115_client.ensure_remote_path(rel_parts, self.target_pid)
-                except Exception:
-                    pass  # 路径不在 base_path 下，或 115 建目录失败，回退到默认 target_pid
+                except Exception as e:
+                    self.logger.warning(f"⚠ 建立115子目录失败，回退到根目录: {e}")
             
             # 检查秒传状态
             self.logger.debug(f"检查秒传状态: {file_info['name']}")
@@ -476,8 +476,8 @@ class RapidUploadController:
                                     rel_parts = file_path.parent.relative_to(non_rapid_dir).parts
                                     if rel_parts:
                                         upload_pid = self.p115_client.ensure_remote_path(rel_parts, self.target_pid)
-                                except Exception:
-                                    pass
+                                except Exception as e:
+                                    self.logger.warning(f"⚠ 建立115子目录失败，回退到根目录: {e}")
                                 self.logger.info(f"⬆ {file_path.name}: 重检达到上限({max_recheck_times}次)，开始上传...")
                                 up_result = self.p115_client.upload_file(file_path, pid=upload_pid)
                                 if up_result['success']:
@@ -628,8 +628,8 @@ class RapidUploadController:
                     rel_parts = file_path.parent.relative_to(base_path).parts
                     if rel_parts:
                         actual_pid = self.p115_client.ensure_remote_path(rel_parts, self.target_pid)
-                except Exception:
-                    pass  # 路径不在 base_path 下，或 115 建目录失败，回退到默认 target_pid
+                except Exception as e:
+                    self.logger.warning(f"⚠ 建立115子目录失败，回退到根目录: {e}")
             
             # 检查秒传状态（始终传入 read_range_bytes，支持任意大小文件的二次验证）
             result = self.p115_client.check_rapid_upload(

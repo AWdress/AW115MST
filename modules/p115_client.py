@@ -218,15 +218,20 @@ class P115ClientWrapper:
             
             # 尝试新建目录
             resp = self.client.fs_mkdir({"cname": name, "pid": current_pid})
+            cid = None
             if resp.get("state"):
-                cid = int(resp["data"]["cid"])
+                try:
+                    cid = int(resp["data"]["cid"])
+                except (KeyError, TypeError, ValueError):
+                    # 响应格式异常，尝试从列表中找（目录已成功创建）
+                    cid = self._find_dir_cid(current_pid, name)
             else:
                 # 目录可能已存在，在列表中搜索
                 cid = self._find_dir_cid(current_pid, name)
-                if cid is None:
-                    raise RuntimeError(
-                        f"无法在115创建或找到目录: {name}（上级 pid={current_pid}）"
-                    )
+            if cid is None:
+                raise RuntimeError(
+                    f"无法在115创建或找到目录: {name}（上级 pid={current_pid}，响应: {resp}）"
+                )
             
             self._remote_dir_cache[cache_key] = cid
             current_pid = cid
