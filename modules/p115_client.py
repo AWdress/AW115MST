@@ -66,10 +66,16 @@ class P115ClientWrapper:
                 
                 # status=2 表示可以秒传（无论 state 值如何）
                 if status == 2:
+                    pickcode = resp.get("pickcode") or resp.get("pick_code")
+                    if not pickcode:
+                        raise RuntimeError(
+                            f"upload_init 返回 status=2 但无 pickcode，文件可能未入库（响应: {resp}）"
+                        )
                     return {
                         'success': True,
                         'can_rapid': True,
                         'status': status,
+                        'pickcode': pickcode,
                         'response': resp,
                         'message': '可以秒传',
                     }
@@ -112,10 +118,16 @@ class P115ClientWrapper:
                     
                     # status=2 表示二次验证通过，可秒传
                     if status2 == 2:
+                        pickcode2 = resp2.get("pickcode") or resp2.get("pick_code")
+                        if not pickcode2:
+                            raise RuntimeError(
+                                f"upload_init 二次验证返回 status=2 但无 pickcode（响应: {resp2}）"
+                            )
                         return {
                             'success': True,
                             'can_rapid': True,
                             'status': status2,
+                            'pickcode': pickcode2,
                             'response': resp2,
                             'message': '可以秒传',
                         }

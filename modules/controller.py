@@ -204,7 +204,7 @@ class RapidUploadController:
                 filename=file_info['name'],
                 filesize=file_info['size'],
                 filesha1=filesha1,
-                read_range_bytes_or_hash=read_range_bytes if file_info['size'] >= 1048576 else None,
+                read_range_bytes_or_hash=read_range_bytes,
                 pid=actual_pid,
             )
             
