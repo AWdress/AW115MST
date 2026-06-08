@@ -466,6 +466,12 @@ class RapidUploadController:
                         pbar.update(1)
                         continue
 
+                    # 上传已失败过的文件，不再重复尝试（避免无限重试和重复通知）
+                    if record.get('upload_failed'):
+                        self.logger.debug(f"⊛ {file_path.name}: 上传曾失败，跳过")
+                        pbar.update(1)
+                        continue
+
                     # 检查是否超过最大检测次数（max_recheck_times 为 0 表示不限次数）
                     if max_recheck_times > 0 and check_count >= max_recheck_times:
                         upload_config = self.config_manager.get('upload', {})
@@ -503,9 +509,11 @@ class RapidUploadController:
                                         self.telegram.notify_rapid_file(file_path.name, action='上传')
                                 else:
                                     self.logger.error(f"✗ {file_path.name}: 上传失败 - {up_result.get('error', '')}")
+                                    self.db.upsert_record(file_key, upload_failed=1)
                                     stats['skipped'] += 1
                             except Exception as e:
                                 self.logger.error(f"✗ {file_path.name}: 上传异常 - {e}")
+                                self.db.upsert_record(file_key, upload_failed=1)
                                 stats['skipped'] += 1
                         else:
                             self.logger.info(f"⊛ {file_path.name}: 已达到最大检测次数({max_recheck_times})，跳过")

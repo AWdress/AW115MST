@@ -54,6 +54,10 @@ class DBManager:
                     created_at REAL
                 )
             """)
+            # 兼容旧库：补充 upload_failed 列（达到上限上传失败的文件标记，避免无限重试）
+            cols = {r[1] for r in conn.execute("PRAGMA table_info(file_records)").fetchall()}
+            if 'upload_failed' not in cols:
+                conn.execute("ALTER TABLE file_records ADD COLUMN upload_failed INTEGER DEFAULT 0")
 
     @staticmethod
     def _row_to_dict(row: sqlite3.Row) -> Dict[str, Any]:
@@ -61,6 +65,8 @@ class DBManager:
         d = dict(row)
         for col in ('non_rapid_dispatched', 'uploaded', 'processed'):
             d[col] = bool(d.get(col, 0))
+        if 'upload_failed' in d:
+            d['upload_failed'] = bool(d.get('upload_failed', 0))
         return d
 
     # ─── file_records ───────────────────────────────────────────

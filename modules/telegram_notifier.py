@@ -147,6 +147,10 @@ class TelegramNotifier:
         if total == 0:
             return
 
+        # 无任何进展（没有新增秒传/上传），且本轮全是跳过时不发通知，避免重复刷屏
+        if now_rapid == 0 and still_non_rapid == 0:
+            return
+
         bar = self._bar(now_rapid, total - skipped) if (total - skipped) > 0 else '──────────'
 
         message = (
