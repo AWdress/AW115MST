@@ -53,6 +53,7 @@ non_rapid/*
 # 配置文件（包含敏感信息）
 config/115-cookies.txt
 config/config.yaml
+config/config.yaml.backup
 
 # 保留示例配置文件
 !config/*.example
