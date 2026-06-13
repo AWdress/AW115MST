@@ -558,7 +558,17 @@ class RapidUploadController:
                                 suffix_parts.append("待秒传原件已清理")
                             self.logger.success(f"✓ [秒传成功] {file_path.name}: 现在可秒传！115已入库，{'，'.join(suffix_parts)}")
                             stats['now_rapid'] += 1
+                            # 回写源文件记录为已上传，避免 process_input_with_delay 反复重新分发同一文件（无限搬运循环）
+                            source_input_key = record.get('source_input_key')
                             self.db.delete_record(file_key)
+                            if source_input_key:
+                                src_rec = self.db.get_record(source_input_key)
+                                if src_rec:
+                                    self.db.upsert_record(source_input_key,
+                                        uploaded=True,
+                                        non_rapid_dispatched=False,
+                                        non_rapid_path=None,
+                                    )
                             if self.telegram.config.get('notify_on_rapid', False):
                                 self.telegram.notify_rapid_file(file_path.name)
                         except Exception as e:
