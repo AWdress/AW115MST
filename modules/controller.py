@@ -525,6 +525,7 @@ class RapidUploadController:
                     result = self.check_and_record(file_path, base_path=non_rapid_dir)
 
                     if not result.get('success'):
+                        self.logger.warning(f"⚠ {file_path.name}: 秒传检查失败 - {result.get('error', '')}")
                         stats['skipped'] += 1
                         pbar.update(1)
                         continue

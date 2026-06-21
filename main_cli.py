@@ -150,7 +150,7 @@ def main():
     parser.add_argument(
         '-v', '--version',
         action='version',
-        version='AW115MST v1.2.6'
+        version='AW115MST v1.2.7'
     )
     
     args = parser.parse_args()

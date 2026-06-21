@@ -156,6 +156,11 @@ class P115ClientWrapper:
                 
             except Exception as e:
                 if attempt < self.retry_times - 1:
+                    # user_key 可能过期，主动刷新后重试（避免需要重启才能恢复）
+                    try:
+                        self.client.upload_key()
+                    except Exception:
+                        pass
                     time.sleep(self.retry_delay)
                     continue
                 else:
@@ -206,6 +211,10 @@ class P115ClientWrapper:
                 }
             except Exception as e:
                 if attempt < self.retry_times - 1:
+                    try:
+                        self.client.upload_key()
+                    except Exception:
+                        pass
                     time.sleep(self.retry_delay)
                     continue
                 return {
