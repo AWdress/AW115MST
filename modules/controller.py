@@ -11,7 +11,7 @@ from datetime import datetime
 from tqdm import tqdm
 
 from .file_handler import FileHandler
-from .p115_client import P115ClientWrapper
+from .p115_client import P115ClientWrapper, SessionExpiredError
 from .logger import Logger
 from .config_manager import ConfigManager
 from .telegram_notifier import TelegramNotifier
@@ -96,6 +96,21 @@ class RapidUploadController:
         # 登录状态缓存（避免每次定时任务都重复校验）
         self._login_cache_time: Optional[datetime] = None
         self._login_cache_ttl: int = 3600  # 1小时内不重复校验
+        # 会话失效（990001）只告警一次，避免刷屏；登录重新成功后复位
+        self._session_expired_notified: bool = False
+
+    def _alert_session_expired(self, detail: str = ""):
+        """115 会话失效（990001 登录超时）时统一处理：清登录缓存 + 告警（去重）。"""
+        self._login_cache_time = None  # 强制下次任务重新校验登录
+        msg = ("115 会话已失效（errNo 990001 登录超时）。已停止本轮处理以避免无效重试与刷屏。"
+               "请更新 config/115-cookies.txt 后重启容器。")
+        self.logger.error(f"✗ {msg} {detail}".strip())
+        if not self._session_expired_notified:
+            self._session_expired_notified = True
+            try:
+                self.telegram.notify_error(msg)
+            except Exception:
+                pass
     
     def _remove_empty_parents(self, path: Path, stop_at: Path):
         """删除文件删除后留下的空目录，向上清理直到 stop_at 为止"""
@@ -125,6 +140,7 @@ class RapidUploadController:
                 username = user_info.get('data', {}).get('user_name', '未知')
                 self.logger.success(f"✓ 登录成功，用户: {username}")
                 self._login_cache_time = datetime.now()  # 更新缓存
+                self._session_expired_notified = False    # 登录恢复，允许下次失效再次告警
                 return True
         
         self._login_cache_time = None  # 清除缓存，下次强制重新检查
@@ -195,9 +211,11 @@ class RapidUploadController:
                     rel_parts = file_path.parent.relative_to(base_path).parts
                     if rel_parts:
                         actual_pid = self.p115_client.ensure_remote_path(rel_parts, self.target_pid)
+                except SessionExpiredError:
+                    raise
                 except Exception as e:
                     self.logger.warning(f"⚠ 建立115子目录失败，回退到根目录: {e}")
-            
+
             # 检查秒传状态
             self.logger.debug(f"检查秒传状态: {file_info['name']}")
             result = self.p115_client.check_rapid_upload(
@@ -298,7 +316,9 @@ class RapidUploadController:
             self.db.mark_processed(file_path_str)
             
             return {'success': True, 'can_rapid': result['can_rapid']}
-            
+
+        except SessionExpiredError:
+            raise
         except Exception as e:
             self.stats['failed'] += 1
             self.logger.error(f"✗ {file_path.name}: 处理异常 - {str(e)}")
@@ -359,9 +379,13 @@ class RapidUploadController:
         
         with tqdm(total=len(files), desc="处理进度", unit="文件") as pbar:
             for idx, file_path in enumerate(files, 1):
-                self.process_file(file_path, target_dir, base_path, move_files)
+                try:
+                    self.process_file(file_path, target_dir, base_path, move_files)
+                except SessionExpiredError as e:
+                    self._alert_session_expired(str(e))
+                    break
                 pbar.update(1)
-                
+
                 # 定期保存断点
                 if idx % auto_save_interval == 0:
                     self.save_checkpoint()
@@ -482,6 +506,8 @@ class RapidUploadController:
                                     rel_parts = file_path.parent.relative_to(non_rapid_dir).parts
                                     if rel_parts:
                                         upload_pid = self.p115_client.ensure_remote_path(rel_parts, self.target_pid)
+                                except SessionExpiredError:
+                                    raise
                                 except Exception as e:
                                     self.logger.warning(f"⚠ 建立115子目录失败，回退到根目录: {e}")
                                 self.logger.info(f"⬆ {file_path.name}: 重检达到上限({max_recheck_times}次)，开始上传...")
@@ -511,6 +537,8 @@ class RapidUploadController:
                                     self.logger.error(f"✗ {file_path.name}: 上传失败 - {up_result.get('error', '')}")
                                     self.db.upsert_record(file_key, upload_failed=1)
                                     stats['skipped'] += 1
+                            except SessionExpiredError:
+                                raise
                             except Exception as e:
                                 self.logger.error(f"✗ {file_path.name}: 上传异常 - {e}")
                                 self.db.upsert_record(file_key, upload_failed=1)
@@ -598,6 +626,9 @@ class RapidUploadController:
                 **stats
             }
             
+        except SessionExpiredError as e:
+            self._alert_session_expired(str(e))
+            return {'success': False, 'error': '115会话失效（990001），已停止重检'}
         except Exception as e:
             self.logger.error(f"重新检测失败: {e}")
             import traceback
@@ -647,9 +678,11 @@ class RapidUploadController:
                     rel_parts = file_path.parent.relative_to(base_path).parts
                     if rel_parts:
                         actual_pid = self.p115_client.ensure_remote_path(rel_parts, self.target_pid)
+                except SessionExpiredError:
+                    raise
                 except Exception as e:
                     self.logger.warning(f"⚠ 建立115子目录失败，回退到根目录: {e}")
-            
+
             # 检查秒传状态（始终传入 read_range_bytes，支持任意大小文件的二次验证）
             result = self.p115_client.check_rapid_upload(
                 filename=file_info['name'],
@@ -683,7 +716,9 @@ class RapidUploadController:
                 'can_rapid': result['can_rapid'],
                 'check_count': existing.get('check_count', 0) + 1,
             }
-            
+
+        except SessionExpiredError:
+            raise
         except Exception as e:
             self.logger.error(f"检查文件失败: {file_path.name} - {e}")
             return {'success': False, 'error': str(e)}
@@ -857,6 +892,9 @@ class RapidUploadController:
                 **stats
             }
             
+        except SessionExpiredError as e:
+            self._alert_session_expired(str(e))
+            return {'success': False, 'error': '115会话失效（990001），已停止本轮检测'}
         except Exception as e:
             self.logger.error(f"处理 input 目录失败: {e}")
             return {'success': False, 'error': str(e)}

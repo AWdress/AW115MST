@@ -4,7 +4,7 @@
 # 115网盘配置
 p115:
   cookies_file: "./config/115-cookies.txt"  # cookies文件路径
-  check_for_relogin: true                   # 自动重新登录
+  check_for_relogin: false                  # 自动重新登录（建议 false：对油猴/网页 cookie 无效且会刷屏空转，会话失效改为识别990001后停止并告警）
   target_pid: 0                             # 秒传目标目录ID（0=根目录，填写115文件夹的cid）
 
 # 文件处理配置

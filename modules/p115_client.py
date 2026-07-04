@@ -9,6 +9,31 @@ from typing import Dict, Any, Optional
 from p115client import P115Client, check_response
 
 
+class SessionExpiredError(Exception):
+    """115 会话失效（errNo 990001 登录超时）。
+
+    此类错误意味着 cookie 已被服务端判为超时/失效，重试或刷新 user_key 都无效，
+    必须更新 cookie。抛出后由上层停止本轮处理并告警，避免无效重试和刷屏。
+    """
+    pass
+
+
+# 115 会话失效相关错误码（登录超时/请重新登录）
+_SESSION_EXPIRED_ERRNOS = {990001, 990002}
+
+
+def is_session_expired(obj: Any) -> bool:
+    """判断一个响应 dict 或异常是否表示 115 会话失效。"""
+    if isinstance(obj, dict):
+        errno = obj.get('errNo', obj.get('errno', obj.get('errcode')))
+        if errno in _SESSION_EXPIRED_ERRNOS:
+            return True
+        text = f"{obj.get('error', '')}{obj.get('message', '')}{obj.get('msg', '')}"
+    else:
+        text = str(obj)
+    return '990001' in text or '登录超时' in text or '请重新登录' in text
+
+
 class P115ClientWrapper:
     """115客户端封装类"""
     
@@ -20,10 +45,22 @@ class P115ClientWrapper:
         """
         self.config = config
         cookies_file = Path(config.get('cookies_file', '~/115-cookies.txt')).expanduser()
-        check_for_relogin = config.get('check_for_relogin', True)
-        
+        # 默认关闭自动重登：它对油猴/网页签发的 cookie 换不出可用会话，反而会刷屏空转，
+        # 且可能把刷新的坏 cookie 写回文件。会话失效改由上层识别 990001 后停止并告警。
+        check_for_relogin = config.get('check_for_relogin', False)
+
+        # 以「字符串」而非文件路径传入 cookie：
+        # 传路径会让 p115client 把自动刷新的 cookie 写回该文件，可能覆盖掉用户手贴的好 cookie。
+        # 传字符串则库不持有 cookies_path，绝不会改动用户的 cookie 文件。
+        cookies_str = ""
+        if cookies_file.exists():
+            try:
+                cookies_str = cookies_file.read_text(encoding='utf-8').strip()
+            except Exception:
+                cookies_str = ""
+
         # 创建客户端
-        self.client = P115Client(cookies_file, check_for_relogin=check_for_relogin)
+        self.client = P115Client(cookies_str, check_for_relogin=check_for_relogin)
         
         # 性能配置
         self.request_timeout = config.get('request_timeout', 10)
@@ -154,7 +191,13 @@ class P115ClientWrapper:
                     'message': f'需要上传（status={status}）',
                 }
                 
+            except SessionExpiredError:
+                # cookie 失效，重试/刷新 user_key 都无意义，直接上抛让上层停止并告警
+                raise
             except Exception as e:
+                # 会话失效（990001 登录超时）：重试和 upload_key() 都救不了，立即上抛
+                if is_session_expired(e):
+                    raise SessionExpiredError(str(e))
                 if attempt < self.retry_times - 1:
                     # user_key 可能过期，主动刷新后重试（避免需要重启才能恢复）
                     try:
@@ -209,7 +252,11 @@ class P115ClientWrapper:
                     'success': True,
                     'response': resp,
                 }
+            except SessionExpiredError:
+                raise
             except Exception as e:
+                if is_session_expired(e):
+                    raise SessionExpiredError(str(e))
                 if attempt < self.retry_times - 1:
                     try:
                         self.client.upload_key()
@@ -239,6 +286,8 @@ class P115ClientWrapper:
             
             # 尝试新建目录
             resp = self.client.fs_mkdir({"cname": name, "pid": current_pid})
+            if is_session_expired(resp):
+                raise SessionExpiredError(f"建立目录时会话失效: {resp}")
             cid = None
             if resp.get("state"):
                 try:
@@ -272,6 +321,8 @@ class P115ClientWrapper:
                 "limit": 1150,
                 "offset": offset,
             })
+            if is_session_expired(resp):
+                raise SessionExpiredError(f"查询目录时会话失效: {resp}")
             items = resp.get("data", [])
             if not items:
                 break
