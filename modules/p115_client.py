@@ -60,7 +60,13 @@ class P115ClientWrapper:
                 cookies_str = ""
 
         # 创建客户端
-        self.client = P115Client(cookies_str, check_for_relogin=check_for_relogin)
+        # 注意：不同 p115client 版本 __init__ 签名不同（新版已移除 check_for_relogin 参数），
+        # 统一「构造后用属性赋值」以兼容各版本。
+        self.client = P115Client(cookies_str)
+        try:
+            self.client.check_for_relogin = check_for_relogin
+        except Exception:
+            pass
         
         # 性能配置
         self.request_timeout = config.get('request_timeout', 10)
