@@ -1,5 +1,5 @@
 # Core dependencies (CLI required)
-p115client>=0.0.7
+p115client==0.0.9.3.7   # 锁定版本：不锁会在重建镜像时被动升级，新版曾移除 __init__ 的 check_for_relogin 参数导致启动崩溃
 PyYAML>=6.0
 requests>=2.31.0
 tqdm>=4.66.0
