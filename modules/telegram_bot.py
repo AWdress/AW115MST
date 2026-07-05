@@ -50,6 +50,7 @@ class TelegramBot:
                 InlineKeyboardButton("🔔 通知设置", callback_data="notification_settings")
             ],
             [
+                InlineKeyboardButton("🔑 扫码登录", callback_data="login_menu"),
                 InlineKeyboardButton("❓ 帮助", callback_data="help")
             ]
         ]
@@ -100,10 +101,188 @@ class TelegramBot:
             await self.show_notification_settings(query)
         elif action == "help":
             await self.show_help(query)
+        elif action == "login_menu":
+            await self.show_login_menu(query)
+        elif action.startswith("login_app:"):
+            app = action.split(":", 1)[1]
+            chat_id = query.message.chat.id
+            if not self._is_authorized_chat(chat_id):
+                await query.edit_message_text("⛔ 无权限：仅配置的 chat_id 可执行扫码登录")
+                return
+            await query.edit_message_text(f"⏳ 正在生成「{app}」登录二维码...")
+            await self._do_qr_login(context, chat_id, app)
         elif action.startswith("toggle_notify_"):
             await self.toggle_notification(query, action)
         elif action == "back_to_menu":
             await self.back_to_menu(query)
+
+    # ==================== 扫码登录 ====================
+
+    # 常用 app 槽位（按钮，每行两个）
+    LOGIN_APPS = [
+        ("115android", "115安卓(F3)"),
+        ("qandroid", "115管理安卓(M1)"),
+        ("tv", "电视(I1)"),
+        ("web", "网页(A1)"),
+        ("ios", "生活苹果(D1)"),
+        ("harmony", "鸿蒙(S1)"),
+    ]
+
+    def _is_authorized_chat(self, chat_id) -> bool:
+        """校验 chat_id：配置了 telegram.chat_id 时仅允许该会话执行敏感操作。"""
+        cfg_chat = str(self.controller.config_manager.get('telegram.chat_id', '') or '')
+        if not cfg_chat:
+            return True  # 未配置则不限制，与其它命令现状一致
+        return str(chat_id) == cfg_chat
+
+    @staticmethod
+    def _cookie_to_str(cookie) -> str:
+        """把 login_qrcode_scan_result 返回的 cookie（dict 或 str）转成 cookie 串。"""
+        if not cookie:
+            return ""
+        if isinstance(cookie, str):
+            return cookie.strip()
+        if isinstance(cookie, dict):
+            return "; ".join(f"{k}={v}" for k, v in cookie.items() if v not in (None, ""))
+        return ""
+
+    async def login_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """处理 /login [app]：带参数直接扫码，不带参数弹出端选择按钮。"""
+        chat_id = update.effective_chat.id
+        if not self._is_authorized_chat(chat_id):
+            await update.message.reply_text("⛔ 无权限：仅配置的 chat_id 可执行扫码登录")
+            return
+        args = context.args
+        if args:
+            app = args[0].strip()
+            await update.message.reply_text(f"⏳ 正在生成「{app}」登录二维码...")
+            await self._do_qr_login(context, chat_id, app)
+        else:
+            keyboard = []
+            row = []
+            for app, label in self.LOGIN_APPS:
+                row.append(InlineKeyboardButton(label, callback_data=f"login_app:{app}"))
+                if len(row) == 2:
+                    keyboard.append(row)
+                    row = []
+            if row:
+                keyboard.append(row)
+            await update.message.reply_text(
+                "🔑 <b>扫码登录取 cookie</b>\n\n选择要登录的 app 槽位（建议选一个你平时不用的端，避免和手机/网页互相踢下线）：",
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode='HTML',
+            )
+
+    async def show_login_menu(self, query):
+        """面板里的「扫码登录」按钮：展示端选择。"""
+        if not self._is_authorized_chat(query.message.chat.id):
+            await query.edit_message_text("⛔ 无权限：仅配置的 chat_id 可执行扫码登录")
+            return
+        keyboard = []
+        row = []
+        for app, label in self.LOGIN_APPS:
+            row.append(InlineKeyboardButton(label, callback_data=f"login_app:{app}"))
+            if len(row) == 2:
+                keyboard.append(row)
+                row = []
+        if row:
+            keyboard.append(row)
+        keyboard.append([InlineKeyboardButton("🔙 返回菜单", callback_data="back_to_menu")])
+        await query.edit_message_text(
+            "🔑 <b>扫码登录取 cookie</b>\n\n选择要登录的 app 槽位：",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='HTML',
+        )
+
+    async def _do_qr_login(self, context: ContextTypes.DEFAULT_TYPE, chat_id, app: str):
+        """完整扫码登录流程：生成二维码→发图→轮询→取 cookie→写入并热加载。"""
+        import asyncio
+        import time as _time
+        from io import BytesIO
+        from p115client import P115Client
+
+        bot = context.bot
+        try:
+            token = await asyncio.to_thread(P115Client.login_qrcode_token)
+            data = token.get('data', {}) or {}
+            uid, tm, sign = data.get('uid'), data.get('time'), data.get('sign')
+            if not uid:
+                await bot.send_message(chat_id, f"❌ 获取二维码失败：{token}")
+                return
+
+            img = await asyncio.to_thread(P115Client.login_qrcode, uid)
+            photo = BytesIO(img)
+            photo.name = "qrcode.png"
+            await bot.send_photo(
+                chat_id=chat_id, photo=photo,
+                caption=(f"🔑 请用手机 115 App 扫描二维码，登录到「{app}」槽位。\n"
+                         f"约 2 分钟内有效，扫码并在手机确认后会自动写入 cookie 并热加载。"),
+            )
+
+            # 轮询扫码状态（长轮询调用放到线程里，避免卡事件循环）
+            deadline = _time.time() + 120
+            scanned_notified = False
+            confirmed = False
+            while _time.time() < deadline:
+                st = await asyncio.to_thread(
+                    P115Client.login_qrcode_scan_status, {'uid': uid, 'time': tm, 'sign': sign}
+                )
+                status = ((st.get('data') or {}).get('status')) if isinstance(st, dict) else None
+                if status == 1 and not scanned_notified:
+                    scanned_notified = True
+                    await bot.send_message(chat_id, "📲 已扫描，请在手机上点击确认登录...")
+                elif status == 2:
+                    confirmed = True
+                    break
+                elif status in (-1, -2):
+                    await bot.send_message(chat_id, "⌛ 二维码已过期或被取消，请重新 /login")
+                    return
+            if not confirmed:
+                await bot.send_message(chat_id, "⌛ 登录超时（2 分钟未确认），请重新 /login")
+                return
+
+            # 取该 app 槽位的 cookie
+            result = await asyncio.to_thread(P115Client.login_qrcode_scan_result, uid, app)
+            cookie = (result.get('data') or {}).get('cookie') if isinstance(result, dict) else None
+            cookies_str = self._cookie_to_str(cookie)
+            if not cookies_str:
+                await bot.send_message(chat_id, f"❌ 获取 cookie 失败：{result}")
+                return
+
+            # 写入 cookie 文件
+            from pathlib import Path as _Path
+            cookies_file = _Path(self.controller.p115_client.cookies_file)
+            wrote = False
+            try:
+                cookies_file.parent.mkdir(parents=True, exist_ok=True)
+                cookies_file.write_text(cookies_str, encoding='utf-8')
+                wrote = True
+            except OSError as we:
+                logger.warning("cookie 文件不可写: %s", we)
+
+            if wrote:
+                # 热加载，无需重启
+                try:
+                    uid_new = await asyncio.to_thread(self.controller.p115_client.reload_cookies)
+                except Exception as re:
+                    logger.error("热加载 cookie 失败: %s", re)
+                    uid_new = ""
+                # 复位会话失效告警去重标记，允许下次失效再次提醒
+                self.controller._session_expired_notified = False
+                self.controller._login_cache_time = None
+                await bot.send_message(
+                    chat_id,
+                    f"✅ 登录成功，cookie 已写入并热加载，无需重启。\nUID: {uid_new or '(已更新)'}"
+                )
+            else:
+                await bot.send_message(
+                    chat_id,
+                    "⚠ 登录成功，但 cookie 文件不可写（可能是只读挂载）。请手动把下面这行粘贴到 "
+                    "config/115-cookies.txt：\n\n" + cookies_str
+                )
+        except Exception as e:
+            logger.error("扫码登录出错", exc_info=e)
+            await bot.send_message(chat_id, f"❌ 扫码登录出错：{e}")
     
     async def show_status(self, query):
         """显示当前状态"""
@@ -543,6 +722,7 @@ https://github.com/AWdress/AW115MST
                 InlineKeyboardButton("🔔 通知设置", callback_data="notification_settings")
             ],
             [
+                InlineKeyboardButton("🔑 扫码登录", callback_data="login_menu"),
                 InlineKeyboardButton("❓ 帮助", callback_data="help")
             ]
         ]
@@ -597,6 +777,7 @@ https://github.com/AWdress/AW115MST
         self.app.add_handler(CommandHandler("status", self.status_command))
         self.app.add_handler(CommandHandler("scan", self.scan_command))
         self.app.add_handler(CommandHandler("recheck", self.recheck_command))
+        self.app.add_handler(CommandHandler("login", self.login_command))
         
         # 注册回调处理器
         self.app.add_handler(CallbackQueryHandler(self.button_callback))

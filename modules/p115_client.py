@@ -45,9 +45,11 @@ class P115ClientWrapper:
         """
         self.config = config
         cookies_file = Path(config.get('cookies_file', '~/115-cookies.txt')).expanduser()
+        self.cookies_file = cookies_file  # 保存路径，供 reload_cookies 热加载使用
         # 默认关闭自动重登：它对油猴/网页签发的 cookie 换不出可用会话，反而会刷屏空转，
         # 且可能把刷新的坏 cookie 写回文件。会话失效改由上层识别 990001 后停止并告警。
         check_for_relogin = config.get('check_for_relogin', False)
+        self._check_for_relogin = check_for_relogin
 
         # 以「字符串」而非文件路径传入 cookie：
         # 传路径会让 p115client 把自动刷新的 cookie 写回该文件，可能覆盖掉用户手贴的好 cookie。
@@ -76,7 +78,30 @@ class P115ClientWrapper:
         # 本次运行的远程目录 ID 缓存，避免重复 API 调用
         # key: (parent_pid, dir_name)  value: cid
         self._remote_dir_cache: dict = {}
-    
+
+    def reload_cookies(self) -> str:
+        """重新从 cookies_file 读取 cookie 并热加载到客户端（无需重启进程）。
+
+        用于 Bot 扫码登录写入新 cookie 后立即生效。
+        :return: 新 cookie 的 UID（读取失败或为空时返回空串）
+        """
+        cookies_str = ""
+        if self.cookies_file.exists():
+            try:
+                cookies_str = self.cookies_file.read_text(encoding='utf-8').strip()
+            except Exception:
+                cookies_str = ""
+        # 用新 cookie 重建客户端（版本无关写法），并清空目录缓存
+        self.client = P115Client(cookies_str)
+        try:
+            self.client.check_for_relogin = self._check_for_relogin
+        except Exception:
+            pass
+        self._remote_dir_cache = {}
+        import re as _re
+        m = _re.search(r'UID=([^;]+)', cookies_str)
+        return m.group(1) if m else ""
+
     def check_rapid_upload(self, filename: str, filesize: int, filesha1: str,
                           read_range_bytes_or_hash: Optional[callable] = None,
                           pid: int = 0) -> Dict[str, Any]:
