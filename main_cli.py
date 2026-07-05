@@ -163,7 +163,7 @@ def main():
     parser.add_argument(
         '-v', '--version',
         action='version',
-        version='AW115MST v1.2.10'
+        version='AW115MST v1.2.11'
     )
     
     args = parser.parse_args()
@@ -186,11 +186,20 @@ def main():
             client = P115Client(app=app, console_qrcode=True)
             cookies_str = client.cookies_str
             uid = re.search(r'UID=([^;]+)', cookies_str)
-            cookies_file.parent.mkdir(parents=True, exist_ok=True)
-            cookies_file.write_text(cookies_str, encoding='utf-8')
-            print(f"\n✅ 登录成功，cookie 已写入: {cookies_file}")
-            print(f"   UID: {uid.group(1) if uid else '(未知)'}")
-            print("   现在可以正常启动工具了。")
+            print(f"\n✅ 扫码登录成功，UID: {uid.group(1) if uid else '(未知)'}")
+            try:
+                cookies_file.parent.mkdir(parents=True, exist_ok=True)
+                cookies_file.write_text(cookies_str, encoding='utf-8')
+                print(f"   cookie 已写入: {cookies_file}")
+                print("   现在可以正常启动工具了。")
+            except OSError as we:
+                # Docker 里 config 常被挂成只读，写不进；退而打印出来让用户手动粘贴
+                print(f"\n⚠ 无法写入 {cookies_file}：{we}")
+                print("   （若在 Docker 中，config 目录可能是只读挂载 :ro，改成 :rw 后重建容器即可自动写入）")
+                print("   请手动把下面这一整行 cookie 复制到该文件：")
+                print("   " + "-" * 64)
+                print(cookies_str)
+                print("   " + "-" * 64)
             sys.exit(0)
         except KeyboardInterrupt:
             print("\n已取消登录")

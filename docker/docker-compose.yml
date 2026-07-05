@@ -5,8 +5,8 @@ services:
     image: awdress/aw115mst:latest
     container_name: AW115MST
     volumes:
-      # 配置文件
-      - ../config:/app/config:ro
+      # 配置文件（需可写：--login 扫码登录会把新 cookie 写回此目录）
+      - ../config:/app/config:rw
       # 工作目录
       - ../待检测:/app/待检测
       - ../可秒传:/app/可秒传
