@@ -53,7 +53,11 @@ def main():
   
   # 重新检测 non_rapid 目录中的文件
   python main_cli.py --recheck
-  
+
+  # 扫码登录取 cookie（写入配置的 cookies_file），换 cookie/失效时用
+  python main_cli.py --login              # 默认登录到 115android 槽位
+  python main_cli.py --login qandroid     # 登录到其它 app 槽位
+
   # 使用自定义配置文件
   python main_cli.py --config my_config.yaml
   
@@ -148,13 +152,53 @@ def main():
     )
     
     parser.add_argument(
+        '--login',
+        nargs='?',
+        const='115android',
+        metavar='APP',
+        help='扫码登录到指定 app 槽位并写入 cookie 文件（默认 115android）。'
+             '示例: --login 115android / --login qandroid / --login tv'
+    )
+
+    parser.add_argument(
         '-v', '--version',
         action='version',
-        version='AW115MST v1.2.9'
+        version='AW115MST v1.2.10'
     )
     
     args = parser.parse_args()
-    
+
+    # 扫码登录取 cookie：登录到指定 app 槽位并写入配置的 cookies_file，然后退出
+    # （不启动监控/上传等流程；即使当前 cookie 已失效也能用它重新取一份）
+    if args.login:
+        from modules.config_manager import ConfigManager
+        from p115client import P115Client
+        import re
+
+        app = args.login
+        cfg = ConfigManager(args.config)
+        p115_cfg = cfg.get_p115_config()
+        cookies_file = Path(p115_cfg.get('cookies_file', './config/115-cookies.txt')).expanduser()
+
+        print(f"\n=== 扫码登录到 app 槽位: {app} ===")
+        print("请用手机 115 App 扫描下方二维码并确认登录...\n")
+        try:
+            client = P115Client(app=app, console_qrcode=True)
+            cookies_str = client.cookies_str
+            uid = re.search(r'UID=([^;]+)', cookies_str)
+            cookies_file.parent.mkdir(parents=True, exist_ok=True)
+            cookies_file.write_text(cookies_str, encoding='utf-8')
+            print(f"\n✅ 登录成功，cookie 已写入: {cookies_file}")
+            print(f"   UID: {uid.group(1) if uid else '(未知)'}")
+            print("   现在可以正常启动工具了。")
+            sys.exit(0)
+        except KeyboardInterrupt:
+            print("\n已取消登录")
+            sys.exit(130)
+        except Exception as e:
+            print(f"\n❌ 扫码登录失败: {e}")
+            sys.exit(1)
+
     # 处理 no-recursive 参数
     if args.no_recursive:
         args.recursive = False
