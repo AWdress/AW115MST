@@ -55,8 +55,20 @@ def main():
   python main_cli.py --recheck
 
   # 扫码登录取 cookie（写入配置的 cookies_file），换 cookie/失效时用
-  python main_cli.py --login              # 默认登录到 115android 槽位
-  python main_cli.py --login qandroid     # 登录到其它 app 槽位
+  python main_cli.py --login              # 默认登录到 115android(F3) 槽位
+  python main_cli.py --login web          # 网页端(A1)
+  python main_cli.py --login android      # 115生活_安卓端(F1)
+  python main_cli.py --login 115android   # 115_安卓端(F3)
+  python main_cli.py --login qandroid     # 115管理_安卓端(M1)
+  python main_cli.py --login ios          # 115生活_苹果端(D1)
+  python main_cli.py --login 115ios       # 115_苹果端(D3)
+  python main_cli.py --login ipad         # 115生活_苹果平板端(H1)
+  python main_cli.py --login tv           # 115生活_安卓电视端(I1)
+  python main_cli.py --login qios         # 115管理_苹果端(N1)
+  python main_cli.py --login harmony      # 115_鸿蒙端(S1)
+  python main_cli.py --login wechatmini   # 115生活_微信小程序端(R1)
+  python main_cli.py --login alipaymini   # 115生活_支付宝小程序端(R2)
+  # 提示：给工具用一个你平时不碰的槽位，避免和手机/网页互相踢下线
 
   # 使用自定义配置文件
   python main_cli.py --config my_config.yaml
@@ -163,7 +175,7 @@ def main():
     parser.add_argument(
         '-v', '--version',
         action='version',
-        version='AW115MST v1.2.11'
+        version='AW115MST v1.2.12'
     )
     
     args = parser.parse_args()

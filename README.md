@@ -93,6 +93,48 @@ python main_cli.py
 
 ## 📝 获取 115 Cookies
 
+> **推荐用内置的扫码登录**（`--login`）取 cookie，而不是从浏览器 / 油猴脚本手动复制。
+> 扫码登录拿到的是 115 官方一等会话，对上传/建目录等操作有效；而油猴等旁路方式签发的
+> cookie 常出现「登录能通过、但操作全部报 `990001 登录超时`」的问题。
+
+### 方式一：扫码登录（推荐）
+
+```bash
+# 本地
+python main_cli.py --login              # 默认登录到 115android(F3) 槽位
+
+# Docker（config 需为可写挂载 :rw）
+docker exec -it AW115MST python main_cli.py --login
+```
+
+终端会打印二维码，用手机 115 App 扫码确认后，cookie 自动写入 `config/115-cookies.txt`。
+
+**各端登录命令**（给工具用一个你平时不碰的槽位，避免和手机/网页互相踢下线）：
+
+| 命令 | 槽位 | 说明 |
+|------|------|------|
+| `--login web` | A1 | 115生活_网页端 |
+| `--login desktop` | A1 | 115浏览器 |
+| `--login android` | F1 | 115生活_安卓端 |
+| `--login 115android` | F3 | 115_安卓端（默认） |
+| `--login qandroid` | M1 | 115管理_安卓端 |
+| `--login ios` | D1 | 115生活_苹果端 |
+| `--login 115ios` | D3 | 115_苹果端 |
+| `--login qios` | N1 | 115管理_苹果端 |
+| `--login ipad` | H1 | 115生活_苹果平板端 |
+| `--login 115ipad` | H3 | 115_苹果平板端 |
+| `--login qipad` | O1 | 115管理_苹果平板端 |
+| `--login tv` | I1 | 115生活_安卓电视端 |
+| `--login harmony` | S1 | 115_鸿蒙端 |
+| `--login wechatmini` | R1 | 115生活_微信小程序端 |
+| `--login alipaymini` | R2 | 115生活_支付宝小程序端 |
+
+> 每个 app 槽位是**独立的单会话**：同一账号在同一槽位重复登录会把先前的踢下线。
+> 所以给工具选一个你自己不用的端（比如你手机用 F3，就给工具用 `qandroid`/`tv`），互不干扰。
+> 换 cookie / 失效时，再跑一次对应的 `--login` 即可，不要用油猴脚本重复签发。
+
+### 方式二：手动复制（不推荐）
+
 1. 浏览器登录 [115.com](https://115.com)
 2. 打开开发者工具（F12）→ Network 标签
 3. 刷新页面，找到任意请求
@@ -100,7 +142,7 @@ python main_cli.py
 
 Cookie 格式示例：
 ```
-UID=12345678_A1_1234567890; CID=abcdefghijklmnopqrstuvwxyz; SEID=xyz123...
+UID=12345678_A1_1234567890; CID=abcdefghijklmnopqrstuvwxyz; SEID=xyz123...; KID=...
 ```
 
 ## ⚙️ 配置说明
@@ -182,6 +224,10 @@ python main_cli.py --manual --check-only
 # 重新检测 待秒传 目录
 python main_cli.py --recheck
 
+# 扫码登录取 cookie（各端命令见「获取 115 Cookies」章节）
+python main_cli.py --login              # 默认 115android(F3)
+python main_cli.py --login qandroid     # 换成你不用的槽位
+
 # 清理已处理文件记录（复制模式）
 python main_cli.py --clean-processed
 
@@ -212,6 +258,7 @@ docker-compose down
 # 进入容器执行命令
 docker exec -it aw115mst python main_cli.py --recheck
 docker exec -it aw115mst python main_cli.py --clean-processed
+docker exec -it aw115mst python main_cli.py --login      # 扫码登录换 cookie（config 需 :rw 挂载）
 ```
 
 ## 🤖 Telegram Bot 交互控制
@@ -310,7 +357,7 @@ chmod -R 755 待检测 可秒传 待秒传 logs data
 ## 📦 依赖项
 
 - Python 3.12+
-- p115client >= 0.0.7
+- p115client == 0.0.9.3.7（已锁定版本，避免上游 API 变动导致启动崩溃）
 - PyYAML >= 6.0
 - requests >= 2.31.0
 - tqdm >= 4.66.0
