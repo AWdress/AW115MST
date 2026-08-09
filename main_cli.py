@@ -15,19 +15,7 @@ from modules.scheduler import Scheduler
 
 def main():
     """主函数"""
-    # 初始化配置文件
-    print("🔧 检查配置文件...")
-    config_ready = init_config_files()
-    
-    if not config_ready:
-        # 首次运行，需要用户配置
-        sys.exit(1)
-    
-    # 验证配置
-    errors, warnings = validate_config()
-    if not print_validation_result(errors, warnings):
-        sys.exit(1)
-    
+    # 先解析参数，使 --help/--version 不依赖配置文件或终端 emoji 编码能力。
     parser = argparse.ArgumentParser(
         description='AW115MST - 115网盘秒传检测工具',
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -175,10 +163,23 @@ def main():
     parser.add_argument(
         '-v', '--version',
         action='version',
-        version='AW115MST v1.2.13'
+        version='AW115MST v1.2.14'
     )
     
     args = parser.parse_args()
+
+    # 初始化配置文件
+    print("🔧 检查配置文件...")
+    config_ready = init_config_files()
+
+    if not config_ready:
+        # 首次运行，需要用户配置
+        sys.exit(1)
+
+    # 验证配置
+    errors, warnings = validate_config()
+    if not print_validation_result(errors, warnings):
+        sys.exit(1)
 
     # 扫码登录取 cookie：登录到指定 app 槽位并写入配置的 cookies_file，然后退出
     # （不启动监控/上传等流程；即使当前 cookie 已失效也能用它重新取一份）

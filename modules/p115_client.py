@@ -4,6 +4,8 @@
 """
 
 import time
+import threading
+from functools import wraps
 from pathlib import Path
 from typing import Dict, Any, Optional
 from p115client import P115Client, check_response
@@ -20,6 +22,15 @@ class SessionExpiredError(Exception):
 
 # 115 会话失效相关错误码（登录超时/请重新登录）
 _SESSION_EXPIRED_ERRNOS = {990001, 990002}
+
+
+def _serialized_client_call(func):
+    """串行化对同一个 p115client 实例的完整操作。"""
+    @wraps(func)
+    def wrapper(self, *args, **kwargs):
+        with self._client_lock:
+            return func(self, *args, **kwargs)
+    return wrapper
 
 
 def is_session_expired(obj: Any) -> bool:
@@ -64,11 +75,11 @@ class P115ClientWrapper:
         # 创建客户端
         # 注意：不同 p115client 版本 __init__ 签名不同（新版已移除 check_for_relogin 参数），
         # 统一「构造后用属性赋值」以兼容各版本。
-        self.client = P115Client(cookies_str)
-        try:
-            self.client.check_for_relogin = check_for_relogin
-        except Exception:
-            pass
+        # p115client 的上传初始化流程会缓存 user_key/加密器状态，这些状态不是线程安全的。
+        # 调度器的实时监控、定时任务和 Bot 会从不同线程共用本实例，因此必须串行访问。
+        self._client_lock = threading.RLock()
+        self._cookies_str = cookies_str
+        self.client = self._new_client(cookies_str)
         
         # 性能配置
         self.request_timeout = config.get('request_timeout', 10)
@@ -78,6 +89,20 @@ class P115ClientWrapper:
         # 本次运行的远程目录 ID 缓存，避免重复 API 调用
         # key: (parent_pid, dir_name)  value: cid
         self._remote_dir_cache: dict = {}
+
+    def _new_client(self, cookies_str: str) -> P115Client:
+        """创建一个干净的客户端，并应用跨版本兼容配置。"""
+        client = P115Client(cookies_str)
+        try:
+            client.check_for_relogin = self._check_for_relogin
+        except Exception:
+            pass
+        return client
+
+    def _reset_client(self) -> None:
+        """丢弃可能已污染的上传凭证/加密状态，效果等同于进程重启。"""
+        self.client = self._new_client(self._cookies_str)
+        self._remote_dir_cache.clear()
 
     def reload_cookies(self) -> str:
         """重新从 cookies_file 读取 cookie 并热加载到客户端（无需重启进程）。
@@ -91,17 +116,15 @@ class P115ClientWrapper:
                 cookies_str = self.cookies_file.read_text(encoding='utf-8').strip()
             except Exception:
                 cookies_str = ""
-        # 用新 cookie 重建客户端（版本无关写法），并清空目录缓存
-        self.client = P115Client(cookies_str)
-        try:
-            self.client.check_for_relogin = self._check_for_relogin
-        except Exception:
-            pass
-        self._remote_dir_cache = {}
+        # 与正在进行的秒传请求互斥，避免替换到一半的客户端被其他线程使用。
+        with self._client_lock:
+            self._cookies_str = cookies_str
+            self._reset_client()
         import re as _re
         m = _re.search(r'UID=([^;]+)', cookies_str)
         return m.group(1) if m else ""
 
+    @_serialized_client_call
     def check_rapid_upload(self, filename: str, filesize: int, filesha1: str,
                           read_range_bytes_or_hash: Optional[callable] = None,
                           pid: int = 0) -> Dict[str, Any]:
@@ -115,6 +138,7 @@ class P115ClientWrapper:
         :param pid: 目标目录ID
         :return: 检查结果
         """
+        # upload_init 的两次调用必须使用同一个、未被其他线程改动的客户端状态。
         for attempt in range(self.retry_times):
             try:
                 # 使用 upload_init 接口
@@ -230,23 +254,22 @@ class P115ClientWrapper:
                 if is_session_expired(e):
                     raise SessionExpiredError(str(e))
                 if attempt < self.retry_times - 1:
-                    # user_key 可能过期，主动刷新后重试（避免需要重启才能恢复）
-                    try:
-                        self.client.upload_key()
-                    except Exception:
-                        pass
+                    # upload_key() 只刷新 key，却不会清掉 p115client 已损坏的加密器缓存。
+                    # 日志中的 "index out of bounds on dimension 1" 会因此一直持续到重启。
+                    # 直接重建客户端，既能刷新 user_key，也能彻底清理内部状态。
+                    self._reset_client()
                     time.sleep(self.retry_delay)
                     continue
-                else:
-                    return {
-                        'success': False,
-                        'can_rapid': False,
-                        'status': None,
-                        'response': None,
-                        'message': f'检查失败: {str(e)}',
-                        'error': str(e),
-                    }
+                return {
+                    'success': False,
+                    'can_rapid': False,
+                    'status': None,
+                    'response': None,
+                    'message': f'检查失败: {str(e)}',
+                    'error': str(e),
+                }
     
+    @_serialized_client_call
     def get_user_info(self) -> Dict[str, Any]:
         """获取用户信息"""
         try:
@@ -262,6 +285,7 @@ class P115ClientWrapper:
                 'error': str(e),
             }
 
+    @_serialized_client_call
     def upload_file(self, file_path: Path, pid: int = 0,
                     progress_callback: Optional[callable] = None) -> Dict[str, Any]:
         """
@@ -300,6 +324,7 @@ class P115ClientWrapper:
                     'error': str(e),
                 }
 
+    @_serialized_client_call
     def ensure_remote_path(self, parts: tuple, base_pid: int) -> int:
         """
         确保 115 上存在指定多级路径，不存在则逐级创建。返回最终目录的 cid。

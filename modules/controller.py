@@ -5,6 +5,8 @@
 
 import json
 import shutil
+import threading
+from functools import wraps
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 from datetime import datetime
@@ -15,6 +17,15 @@ from .p115_client import P115ClientWrapper, SessionExpiredError
 from .logger import Logger
 from .config_manager import ConfigManager
 from .telegram_notifier import TelegramNotifier
+
+
+def _serialized_processing(func):
+    """防止监控、定时任务和 Bot 同时处理同一批文件。"""
+    @wraps(func)
+    def wrapper(self, *args, **kwargs):
+        with self._processing_lock:
+            return func(self, *args, **kwargs)
+    return wrapper
 
 
 class RapidUploadController:
@@ -98,6 +109,8 @@ class RapidUploadController:
         self._login_cache_ttl: int = 3600  # 1小时内不重复校验
         # 会话失效（990001）只告警一次，避免刷屏；登录重新成功后复位
         self._session_expired_notified: bool = False
+        # 文件扫描、数据库更新和移动必须作为完整流程串行执行。
+        self._processing_lock = threading.RLock()
 
     def _alert_session_expired(self, detail: str = ""):
         """115 会话失效（990001 登录超时）时统一处理：清登录缓存 + 告警（去重）。"""
@@ -134,14 +147,13 @@ class RapidUploadController:
                 return True  # 缓存仍有效，直接跳过
         
         self.logger.info("检查115登录状态...")
-        if self.p115_client.check_login_status():
-            user_info = self.p115_client.get_user_info()
-            if user_info.get('success'):
-                username = user_info.get('data', {}).get('user_name', '未知')
-                self.logger.success(f"✓ 登录成功，用户: {username}")
-                self._login_cache_time = datetime.now()  # 更新缓存
-                self._session_expired_notified = False    # 登录恢复，允许下次失效再次告警
-                return True
+        user_info = self.p115_client.get_user_info()
+        if user_info.get('success'):
+            username = user_info.get('data', {}).get('user_name', '未知')
+            self.logger.success(f"✓ 登录成功，用户: {username}")
+            self._login_cache_time = datetime.now()  # 更新缓存
+            self._session_expired_notified = False    # 登录恢复，允许下次失效再次告警
+            return True
         
         self._login_cache_time = None  # 清除缓存，下次强制重新检查
         self.logger.error("✗ 115登录失败，请检查cookies配置")
@@ -330,6 +342,7 @@ class RapidUploadController:
             })
             return {'success': False, 'error': str(e)}
     
+    @_serialized_processing
     def process_directory(self, input_path: str | Path, target_path: Optional[str | Path] = None,
                          recursive: bool = True, move_files: bool = True) -> Dict[str, Any]:
         """
@@ -421,6 +434,7 @@ class RapidUploadController:
         """
         return self.process_directory(input_path, target_path=None, recursive=recursive, move_files=False)
 
+    @_serialized_processing
     def recheck_non_rapid_files(self) -> Dict[str, Any]:
         """
         重新检测 non_rapid 目录中的文件
@@ -723,6 +737,7 @@ class RapidUploadController:
             self.logger.error(f"检查文件失败: {file_path.name} - {e}")
             return {'success': False, 'error': str(e)}
     
+    @_serialized_processing
     def process_input_with_delay(self) -> Dict[str, Any]:
         """
         处理 input 目录中的文件（延迟移动策略）
@@ -899,6 +914,7 @@ class RapidUploadController:
             self.logger.error(f"处理 input 目录失败: {e}")
             return {'success': False, 'error': str(e)}
 
+    @_serialized_processing
     def clean_processed_records(self) -> Dict[str, Any]:
         """
         清理已处理文件的记录
