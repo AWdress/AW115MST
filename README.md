@@ -1,3 +1,5 @@
+
+
 <div align="center">
   <img src="logo.png" alt="AW115MST Logo" width="600"/>
   
@@ -256,9 +258,9 @@ docker-compose restart
 docker-compose down
 
 # 进入容器执行命令
-docker exec -it aw115mst python main_cli.py --recheck
-docker exec -it aw115mst python main_cli.py --clean-processed
-docker exec -it aw115mst python main_cli.py --login      # 扫码登录换 cookie（config 需 :rw 挂载）
+docker exec -it AW115MST python main_cli.py --recheck
+docker exec -it AW115MST python main_cli.py --clean-processed
+docker exec -it AW115MST python main_cli.py --login      # 扫码登录换 cookie（config 需 :rw 挂载）
 ```
 
 ## 🤖 Telegram Bot 交互控制
